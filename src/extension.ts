@@ -1,5 +1,5 @@
 import * as SDK from "azure-devops-extension-sdk";
-import { PdfDiffViewer, ViewMode } from './pr-diff-viewer';
+import { PdfDiffViewer } from './pr-diff-viewer';
 
 // Initialize the Azure DevOps SDK
 SDK.init();
@@ -18,12 +18,12 @@ async function initialize() {
         }
 
         // Get the current context
-        const context = SDK.getConfiguration();
+        // const context = SDK.getConfiguration();
         
         // For demo purposes, we'll use sample PDFs
         // In a real implementation, this would fetch the actual PDF files from the PR
-        const basePdfUrl = getSamplePdfUrl('base');
-        const headPdfUrl = getSamplePdfUrl('head');
+        // const basePdfUrl = getSamplePdfUrl('base');
+        // const headPdfUrl = getSamplePdfUrl('head');
 
         // Initialize the diff viewer
         diffViewer = new PdfDiffViewer();
@@ -132,11 +132,12 @@ function setActiveButton(activeId: string) {
     });
 }
 
-function getSamplePdfUrl(type: 'base' | 'head'): string {
-    // In a real implementation, this would construct the URL to fetch the PDF from Azure DevOps
-    // For now, return placeholder URLs
-    return `https://example.com/sample-${type}.pdf`;
-}
+// Commented out - currently unused but may be needed for real implementation
+// function getSamplePdfUrl(type: 'base' | 'head'): string {
+//     // In a real implementation, this would construct the URL to fetch the PDF from Azure DevOps
+//     // For now, return placeholder URLs
+//     return `https://example.com/sample-${type}.pdf`;
+// }
 
 async function loadSamplePdfs(viewer: PdfDiffViewer): Promise<void> {
     // Create sample PDF data for demonstration
@@ -149,7 +150,7 @@ async function loadSamplePdfs(viewer: PdfDiffViewer): Promise<void> {
     await viewer.loadPdfsFromData(basePdfData, headPdfData);
 }
 
-async function createSamplePdf(text: string, numPages: number): Promise<Uint8Array> {
+async function createSamplePdf(_text: string, _numPages: number): Promise<Uint8Array> {
     // This is a simplified demo implementation
     // In a real scenario, PDFs would be fetched from the PR files
     

@@ -1,4 +1,4 @@
-import { PdfRenderer, PdfPage } from './pdf-renderer';
+import { PdfRenderer } from './pdf-renderer';
 import pixelmatch from 'pixelmatch';
 
 export type ViewMode = 'side-by-side' | 'inline' | 'pixel-diff';

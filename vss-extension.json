@@ -14,7 +14,7 @@
     }
   ],
   "icons": {
-    "default": "images/logo.png"
+    "default": "images/logo.svg"
   },
   "content": {
     "details": {
