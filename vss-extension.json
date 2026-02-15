@@ -2,11 +2,19 @@
   "manifestVersion": 1,
   "id": "pdf-diff-viewer",
   "name": "PDF Diff Viewer",
-  "version": "1.0.0",
-  "publisher": "TimothyK",
+  "version": "0.0.0",
+  "publisher": "CodeMonkeyProjectiles",
   "description": "View PDF file diffs in pull requests with side-by-side, inline, and pixel diff views",
   "categories": [
     "Azure Repos"
+  ],
+  "tags": [
+    "PDF",
+    "Git",
+    "Diff",
+    "Image",
+    "Pixel",
+    "Pull Request"
   ],
   "targets": [
     {
@@ -19,6 +27,9 @@
   "content": {
     "details": {
       "path": "README.md"
+    },
+    "license": {
+      "path": "LICENSE"
     }
   },
   "files": [
@@ -59,6 +70,24 @@
       }
     }
   ],
+
+  "links": {
+    "home": {
+      "uri": "https://github.com/TimothyK/PdfDiff"
+    },
+    "getstarted": {
+      "uri": "https://github.com/TimothyK/PdfDiff#usage"
+    },
+    "repository": {
+      "uri": "https://github.com/TimothyK/PdfDiff"
+    },
+    "support": {
+      "uri": "https://github.com/TimothyK/PdfDiff/issues"
+    },
+    "privacypolicy": {
+      "uri": "https://github.com/TimothyK/PdfDiff/blob/main/PRIVACY.md"
+    }
+  },
   "scopes": [
     "vso.code",
     "vso.code_write"
