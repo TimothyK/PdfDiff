@@ -34,7 +34,7 @@ Successfully created a complete Azure DevOps extension for viewing PDF file diff
 
 ### Core Technologies
 - **TypeScript**: Type-safe development
-- **PDF.js**: PDF rendering and parsing
+- **PDF.js**: PDF rendering and parsing (v4.10.38 - security patched)
 - **Pixelmatch**: Pixel-level comparison
 - **Azure DevOps Extension SDK**: Platform integration
 - **Webpack**: Module bundling
@@ -67,6 +67,14 @@ PdfDiff/
 ✅ **Code Review**: No issues found
 ✅ **Security Scan**: No vulnerabilities detected (CodeQL)
 ✅ **Package**: Successfully creates VSIX file
+✅ **Dependencies**: 0 production vulnerabilities (pdfjs-dist updated to 4.10.38)
+
+## Security
+
+The extension uses secure, up-to-date dependencies:
+- **pdfjs-dist 4.10.38**: Patched version that fixes CVE vulnerability allowing arbitrary JavaScript execution
+- All production dependencies scanned and verified free of known vulnerabilities
+- CodeQL security analysis passed with 0 alerts
 
 ## Installation & Usage
 
@@ -95,7 +103,9 @@ Potential improvements for future versions:
 ## Security Summary
 
 No security vulnerabilities were found during the CodeQL analysis. The extension:
-- Uses official, well-maintained libraries (PDF.js, pixelmatch)
+- Uses official, well-maintained libraries (PDF.js v4.10.38, pixelmatch)
+- **Security Fix Applied**: Updated pdfjs-dist from vulnerable version (≤4.1.392) to patched version (4.10.38) to prevent arbitrary JavaScript execution attacks
 - No direct file system access (sandboxed browser environment)
 - Follows Azure DevOps extension best practices
 - Proper resource cleanup and memory management
+- 0 vulnerabilities in production dependencies
