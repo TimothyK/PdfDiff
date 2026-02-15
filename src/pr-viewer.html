@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Diff Viewer</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            overflow: hidden;
+        }
+
+        #toolbar {
+            background-color: #f4f4f4;
+            border-bottom: 1px solid #ddd;
+            padding: 10px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: 1px solid #ccc;
+            background-color: white;
+            cursor: pointer;
+            border-radius: 3px;
+            font-size: 14px;
+        }
+
+        .btn:hover {
+            background-color: #e8e8e8;
+        }
+
+        .btn.active {
+            background-color: #0078d4;
+            color: white;
+            border-color: #0078d4;
+        }
+
+        .divider {
+            width: 1px;
+            height: 24px;
+            background-color: #ccc;
+        }
+
+        #viewer-container {
+            height: calc(100vh - 60px);
+            overflow: auto;
+            position: relative;
+        }
+
+        .diff-view {
+            display: none;
+            padding: 20px;
+        }
+
+        .diff-view.active {
+            display: block;
+        }
+
+        /* Side-by-side view */
+        #side-by-side-view {
+            display: flex;
+            gap: 10px;
+        }
+
+        .pdf-column {
+            flex: 1;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            background-color: white;
+        }
+
+        .pdf-column h3 {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            color: #666;
+        }
+
+        .canvas-container {
+            overflow: auto;
+            max-height: calc(100vh - 150px);
+            border: 1px solid #eee;
+            background-color: #fafafa;
+        }
+
+        canvas {
+            display: block;
+            margin: 0 auto;
+        }
+
+        /* Inline view */
+        #inline-view .page-diff {
+            margin-bottom: 20px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            background-color: white;
+        }
+
+        .page-label {
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .removed-page {
+            background-color: #ffebe9;
+            border-left: 4px solid #cb2431;
+        }
+
+        .added-page {
+            background-color: #e6ffed;
+            border-left: 4px solid #28a745;
+        }
+
+        /* Pixel diff view */
+        #pixel-diff-view .page-comparison {
+            margin-bottom: 20px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            background-color: white;
+        }
+
+        .diff-canvas-container {
+            display: flex;
+            gap: 10px;
+            align-items: flex-start;
+        }
+
+        .diff-highlight {
+            border: 2px solid #ff0000;
+        }
+
+        #loading {
+            padding: 20px;
+            text-align: center;
+            color: #666;
+        }
+
+        #error {
+            padding: 20px;
+            color: #cb2431;
+            background-color: #ffebe9;
+            border: 1px solid #cb2431;
+            border-radius: 4px;
+            margin: 20px;
+            display: none;
+        }
+
+        .page-controls {
+            margin-bottom: 10px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .page-nav {
+            display: flex;
+            gap: 5px;
+            align-items: center;
+        }
+
+        .page-info {
+            font-size: 14px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div id="toolbar">
+        <button class="btn active" id="side-by-side-btn">Side by Side</button>
+        <button class="btn" id="inline-btn">Inline</button>
+        <button class="btn" id="pixel-diff-btn">Pixel Diff</button>
+        <div class="divider"></div>
+        <div class="page-nav">
+            <button class="btn" id="prev-page">Previous</button>
+            <span class="page-info" id="page-info">Page 1</span>
+            <button class="btn" id="next-page">Next</button>
+        </div>
+    </div>
+
+    <div id="viewer-container">
+        <div id="loading">Loading PDF files...</div>
+        <div id="error"></div>
+        
+        <div id="side-by-side-view" class="diff-view active">
+            <div class="pdf-column">
+                <h3>Original (Base)</h3>
+                <div class="canvas-container" id="base-container"></div>
+            </div>
+            <div class="pdf-column">
+                <h3>Modified (Head)</h3>
+                <div class="canvas-container" id="head-container"></div>
+            </div>
+        </div>
+
+        <div id="inline-view" class="diff-view">
+            <div id="inline-container"></div>
+        </div>
+
+        <div id="pixel-diff-view" class="diff-view">
+            <div id="pixel-diff-container"></div>
+        </div>
+    </div>
+
+    <script src="extension.js"></script>
+</body>
+</html>

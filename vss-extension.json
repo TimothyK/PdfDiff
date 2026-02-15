@@ -1,0 +1,66 @@
+{
+  "manifestVersion": 1,
+  "id": "pdf-diff-viewer",
+  "name": "PDF Diff Viewer",
+  "version": "1.0.0",
+  "publisher": "TimothyK",
+  "description": "View PDF file diffs in pull requests with side-by-side, inline, and pixel diff views",
+  "categories": [
+    "Azure Repos"
+  ],
+  "targets": [
+    {
+      "id": "Microsoft.VisualStudio.Services"
+    }
+  ],
+  "icons": {
+    "default": "images/logo.png"
+  },
+  "content": {
+    "details": {
+      "path": "README.md"
+    }
+  },
+  "files": [
+    {
+      "path": "dist",
+      "addressable": true
+    },
+    {
+      "path": "images",
+      "addressable": true
+    }
+  ],
+  "contributions": [
+    {
+      "id": "pdf-diff-viewer-hub",
+      "type": "ms.vss-web.hub",
+      "description": "PDF Diff Viewer for Pull Requests",
+      "targets": [
+        "ms.vss-code-web.pr-tabs"
+      ],
+      "properties": {
+        "name": "PDF Diff",
+        "uri": "dist/pr-viewer.html",
+        "order": 100,
+        "supportsMobile": true
+      }
+    },
+    {
+      "id": "pdf-diff-content-handler",
+      "type": "ms.vss-web.content-handler",
+      "description": "Custom diff viewer for PDF files",
+      "targets": [
+        "ms.vss-code-web.file-diff-content-handler"
+      ],
+      "properties": {
+        "fileTypes": [".pdf"],
+        "uri": "dist/pr-viewer.html"
+      }
+    }
+  ],
+  "scopes": [
+    "vso.code",
+    "vso.code_write"
+  ]
+}
