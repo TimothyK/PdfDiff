@@ -2,6 +2,8 @@
 
 Azure DevOps extension for viewing PDF file diffs in pull requests with multiple view modes.
 
+![PDF Diff Viewer UI](https://github.com/user-attachments/assets/73a1ea62-a3fc-4a47-afe1-bc9b5c53523e)
+
 ## Features
 
 - **Side-by-Side View**: Compare original and modified PDF files side by side
