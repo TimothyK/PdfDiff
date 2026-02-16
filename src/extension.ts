@@ -156,6 +156,7 @@ async function loadPdfsFromContext(): Promise<void> {
         // Get PR ID and repository ID from config
         const pullRequestId: number = (config as any).pullRequestId;
         const repositoryId: string = (config as any).repositoryId;
+        const pullRequest = (config as any).pullRequest;
         
         if (!pullRequestId) {
             throw new Error('Pull Request ID not found. Please ensure this tab is opened in a Pull Request context.');
@@ -165,16 +166,16 @@ async function loadPdfsFromContext(): Promise<void> {
             throw new Error(`Repository ID not found. PR ID: ${pullRequestId}`);
         }
         
+        if (!pullRequest) {
+            throw new Error(`Pull Request data not found in config. PR ID: ${pullRequestId}`);
+        }
+        
         console.log(`Loading PDF diff for PR ${pullRequestId} in repository ${repositoryId}`);
 
-        // Get Git client and pull request details
+        // Get Git client
         const gitClient = getClient(GitRestClient);
-        const pullRequest = await gitClient.getPullRequest(repositoryId, pullRequestId, project.name);
-
-        if (!pullRequest) {
-            throw new Error(`Could not fetch pull request ${pullRequestId} from repository ${repositoryId}`);
-        }
-
+        
+        console.log('Fetching PR iterations...');
         // Get the changes in the PR
         const iterations = await gitClient.getPullRequestIterations(repositoryId, pullRequestId, project.name);
         
@@ -182,6 +183,7 @@ async function loadPdfsFromContext(): Promise<void> {
             throw new Error('No iterations found in Pull Request');
         }
 
+        console.log(`Found ${iterations.length} iterations, fetching changes from latest...`);
         const latestIteration = iterations[iterations.length - 1];
         const changes = await gitClient.getPullRequestIterationChanges(
             repositoryId,
@@ -190,6 +192,7 @@ async function loadPdfsFromContext(): Promise<void> {
             project.name
         );
 
+        console.log(`Found ${changes.changeEntries?.length || 0} changes, looking for PDF files...`);
         // Find the first PDF file in the changes
         const pdfChange = changes.changeEntries?.find((change: GitChange) => 
             change.item?.path?.toLowerCase().endsWith('.pdf')
@@ -199,21 +202,28 @@ async function loadPdfsFromContext(): Promise<void> {
             throw new Error('No PDF files found in this Pull Request. Please add a PDF file to the PR to use this viewer.');
         }
 
+        console.log(`Found PDF file: ${pdfChange.item.path}`);
+        
         // Fetch the base and head versions of the PDF
         const pdfPath = pdfChange.item.path!;
         const baseCommitId = pullRequest.lastMergeSourceCommit?.commitId;
         const headCommitId = pullRequest.lastMergeTargetCommit?.commitId;
 
+        console.log(`Base commit: ${baseCommitId}, Head commit: ${headCommitId}`);
+        
         if (!baseCommitId || !headCommitId) {
             throw new Error('Could not determine source and target commits for this Pull Request');
         }
 
+        console.log('Fetching PDF files from commits...');
         // Fetch the PDF files
         const baseData = await fetchPdfFile(gitClient, repositoryId, pdfPath, baseCommitId);
         const headData = await fetchPdfFile(gitClient, repositoryId, pdfPath, headCommitId);
 
+        console.log('PDF files fetched, rendering diff...');
         if (diffViewer) {
             await diffViewer.loadPdfsFromData(baseData, headData);
+            console.log('PDF diff rendered successfully');
         }
 
     } catch (error) {
