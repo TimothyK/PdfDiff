@@ -1,5 +1,7 @@
 import * as SDK from "azure-devops-extension-sdk";
 import { PdfDiffViewer } from './pr-diff-viewer';
+import { CommonServiceIds, IProjectPageService, getClient } from "azure-devops-extension-api";
+import { GitRestClient, VersionControlRecursionType, GitVersionType } from "azure-devops-extension-api/Git";
 
 // Initialize the Azure DevOps SDK
 SDK.init();
@@ -9,6 +11,8 @@ let diffViewer: PdfDiffViewer | null = null;
 async function initialize() {
     try {
         await SDK.ready();
+        
+        console.log('PDF Diff Viewer extension loaded');
 
         const loading = document.getElementById('loading');
         const errorDiv = document.getElementById('error');
@@ -17,21 +21,32 @@ async function initialize() {
             loading.style.display = 'block';
         }
 
-        // Get the current context
-        // const context = SDK.getConfiguration();
-        
-        // For demo purposes, we'll use sample PDFs
-        // In a real implementation, this would fetch the actual PDF files from the PR
-        // const basePdfUrl = getSamplePdfUrl('base');
-        // const headPdfUrl = getSamplePdfUrl('head');
+        // Get the configuration context from Azure DevOps
+        const config = SDK.getConfiguration();
+        console.log('Configuration:', config);
 
         // Initialize the diff viewer
         diffViewer = new PdfDiffViewer();
 
         try {
-            // In a real implementation, fetch the actual files from Azure DevOps API
-            // For now, we'll use sample URLs or create demo PDFs
-            await loadSamplePdfs(diffViewer);
+            // Check if we have file context (content handler scenario)
+            if (config.onBuildChanged || config.onViewDisplayed) {
+                // This is a content handler - wait for file information
+                if (config.onBuildChanged) {
+                    config.onBuildChanged(async (args: any) => {
+                        await loadPdfsFromContext(args);
+                    });
+                }
+                
+                if (config.onViewDisplayed) {
+                    config.onViewDisplayed(async (args: any) => {
+                        await loadPdfsFromContext(args);
+                    });
+                }
+            } else {
+                // Try to load from current context
+                await loadPdfsFromContext(config);
+            }
 
             if (loading) {
                 loading.style.display = 'none';
@@ -42,6 +57,9 @@ async function initialize() {
 
             // Render the initial view
             await diffViewer.render('side-by-side');
+            
+            // Notify Azure DevOps that the extension has loaded successfully
+            SDK.notifyLoadSucceeded();
 
         } catch (error) {
             console.error('Error loading PDFs:', error);
@@ -52,6 +70,9 @@ async function initialize() {
             if (loading) {
                 loading.style.display = 'none';
             }
+            
+            // Still notify load succeeded even if PDF loading failed
+            SDK.notifyLoadSucceeded();
         }
 
     } catch (error) {
@@ -61,6 +82,9 @@ async function initialize() {
             errorDiv.textContent = `Error initializing extension: ${error}`;
             errorDiv.style.display = 'block';
         }
+        
+        // Notify load succeeded to prevent Azure DevOps from waiting indefinitely
+        SDK.notifyLoadSucceeded();
     }
 }
 
@@ -115,6 +139,111 @@ function setupEventListeners() {
                 diffViewer.nextPage();
             }
         });
+    }
+}
+
+async function loadPdfsFromContext(context: any): Promise<void> {
+    try {
+        console.log('Loading PDFs from context:', context);
+
+        // Get the file paths from the context
+        let basePath: string | undefined;
+        let headPath: string | undefined;
+        let repositoryId: string | undefined;
+        let baseVersion: string | undefined;
+        let headVersion: string | undefined;
+
+        // Try different context formats
+        if (context.originalFile && context.modifiedFile) {
+            // Content handler format
+            basePath = context.originalFile.path;
+            headPath = context.modifiedFile.path;
+            repositoryId = context.repositoryId;
+            baseVersion = context.originalFile.version || context.baseVersion;
+            headVersion = context.modifiedFile.version || context.targetVersion;
+        } else if (context.item) {
+            // Alternative format
+            basePath = context.item.path;
+            headPath = context.item.path;
+            repositoryId = context.repositoryId;
+            baseVersion = context.baseVersion;
+            headVersion = context.targetVersion;
+        } else if (context.path) {
+            // Simple path format
+            basePath = context.path;
+            headPath = context.path;
+            repositoryId = context.repositoryId;
+            baseVersion = context.baseCommitId || context.originalCommitId;
+            headVersion = context.targetCommitId || context.modifiedCommitId;
+        }
+
+        if (!basePath || !headPath) {
+            console.warn('No file paths found in context, using sample PDFs');
+            await loadSamplePdfs(diffViewer!);
+            return;
+        }
+
+        // Get project context
+        const projectService = await SDK.getService<IProjectPageService>(CommonServiceIds.ProjectPageService);
+        const project = await projectService.getProject();
+
+        if (!project) {
+            throw new Error('Could not get project context');
+        }
+
+        // Get Git client
+        const gitClient = getClient(GitRestClient);
+
+        // Fetch the PDF files
+        const baseData = await fetchPdfFile(gitClient, repositoryId || '', basePath, baseVersion || 'GB' + (baseVersion || ''));
+        const headData = await fetchPdfFile(gitClient, repositoryId || '', headPath, headVersion || 'GT' + (headVersion || ''));
+
+        if (diffViewer) {
+            await diffViewer.loadPdfsFromData(baseData, headData);
+        }
+
+    } catch (error) {
+        console.error('Error loading PDFs from context:', error);
+        // Fallback to sample PDFs
+        await loadSamplePdfs(diffViewer!);
+    }
+}
+
+async function fetchPdfFile(gitClient: GitRestClient, repositoryId: string, path: string, version: string): Promise<Uint8Array> {
+    try {
+        // Fetch the file content
+        const item = await gitClient.getItem(
+            repositoryId,
+            path,
+            undefined, // project
+            undefined, // scopePath
+            VersionControlRecursionType.None,
+            false, // includeContentMetadata
+            false, // latestProcessedChange
+            false, // download
+            {
+                version: version.replace(/^G[BT]/, ''), // Remove GB or GT prefix
+                versionType: version.startsWith('GB') ? GitVersionType.Branch : (version.startsWith('GT') ? GitVersionType.Tag : GitVersionType.Commit),
+                versionOptions: 0
+            }
+        );
+
+        if (!item || !item.content) {
+            throw new Error(`Could not fetch file content for ${path}`);
+        }
+
+        // Convert base64 content to Uint8Array
+        const base64Content = item.content;
+        const binaryString = atob(base64Content);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+        }
+
+        return bytes;
+    } catch (error) {
+        console.error(`Error fetching PDF file ${path}:`, error);
+        throw error;
     }
 }
 

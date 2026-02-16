@@ -2,7 +2,7 @@
   "manifestVersion": 1,
   "id": "pdf-diff-viewer",
   "name": "PDF Diff Viewer",
-  "version": "0.0.4",
+  "version": "0.0.9",
   "publisher": "CodeMonkeyProjectiles",
   "description": "View PDF file diffs in pull requests with side-by-side, inline, and pixel diff views",
   "categories": [
@@ -44,8 +44,8 @@
   ],
   "contributions": [
     {
-      "id": "pdf-diff-viewer-hub",
-      "type": "ms.vss-web.hub",
+      "id": "pdf-diff-tab",
+      "type": "ms.vss-web.tab",
       "description": "PDF Diff Viewer for Pull Requests",
       "targets": [
         "ms.vss-code-web.pr-tabs"
@@ -53,20 +53,7 @@
       "properties": {
         "name": "PDF Diff",
         "uri": "dist/pr-viewer.html",
-        "order": 100,
-        "supportsMobile": true
-      }
-    },
-    {
-      "id": "pdf-diff-content-handler",
-      "type": "ms.vss-web.content-handler",
-      "description": "Custom diff viewer for PDF files",
-      "targets": [
-        "ms.vss-code-web.file-diff-content-handler"
-      ],
-      "properties": {
-        "fileTypes": [".pdf"],
-        "uri": "dist/pr-viewer.html"
+        "title": "PDF Diff"
       }
     }
   ],
@@ -89,6 +76,7 @@
     }
   },
   "scopes": [
-    "vso.code"
+    "vso.code",
+    "vso.code_status"
   ]
 }
