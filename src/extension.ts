@@ -205,8 +205,13 @@ async function loadPdfsFromContext(): Promise<void> {
         console.log('Fetching PDF files from commits...');
         try {
             // Fetch the PDF files
-            const baseData = await fetchPdfFile(gitClient, repositoryId, pdfPath, baseCommitId);
-            const headData = await fetchPdfFile(gitClient, repositoryId, pdfPath, headCommitId);
+            console.log('About to fetch base PDF...');
+            const baseData = await fetchPdfFile(gitClient, repositoryId, pdfPath, baseCommitId, project.id!);
+            console.log('Base PDF fetched successfully');
+            
+            console.log('About to fetch head PDF...');
+            const headData = await fetchPdfFile(gitClient, repositoryId, pdfPath, headCommitId, project.id!);
+            console.log('Head PDF fetched successfully');
 
             console.log('PDF files fetched, rendering diff...');
             if (diffViewer) {
@@ -224,15 +229,16 @@ async function loadPdfsFromContext(): Promise<void> {
     }
 }
 
-async function fetchPdfFile(gitClient: GitRestClient, repositoryId: string, path: string, commitId: string): Promise<Uint8Array> {
+async function fetchPdfFile(gitClient: GitRestClient, repositoryId: string, path: string, commitId: string, projectId: string): Promise<Uint8Array> {
     try {
-        console.log(`Fetching PDF: repo=${repositoryId}, path=${path}, commit=${commitId}`);
+        console.log(`Fetching PDF: repo=${repositoryId}, path=${path}, commit=${commitId}, project=${projectId}`);
         
         // Fetch the file content at the specific commit
+        console.log('Calling gitClient.getItem...');
         const item = await gitClient.getItem(
             repositoryId,
             path,
-            undefined, // project
+            projectId, // project
             undefined, // scopePath
             VersionControlRecursionType.None,
             false, // includeContentMetadata
@@ -245,9 +251,13 @@ async function fetchPdfFile(gitClient: GitRestClient, repositoryId: string, path
             }
         );
 
+        console.log('gitClient.getItem returned:', item ? 'item received' : 'null');
+        
         if (!item || !item.content) {
             throw new Error(`Could not fetch file content for ${path}`);
         }
+
+        console.log('Converting base64 content to Uint8Array...');
 
         // Convert base64 content to Uint8Array
         const base64Content = item.content;
