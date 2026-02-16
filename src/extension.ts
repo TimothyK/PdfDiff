@@ -1,7 +1,7 @@
 import * as SDK from "azure-devops-extension-sdk";
 import { PdfDiffViewer } from './pr-diff-viewer';
 import { CommonServiceIds, IProjectPageService, getClient } from "azure-devops-extension-api";
-import { GitRestClient, VersionControlRecursionType, GitVersionType } from "azure-devops-extension-api/Git";
+import { GitRestClient, VersionControlRecursionType, GitVersionType, GitChange } from "azure-devops-extension-api/Git";
 
 // Initialize the Azure DevOps SDK
 SDK.init();
@@ -146,57 +146,102 @@ async function loadPdfsFromContext(context: any): Promise<void> {
     try {
         console.log('Loading PDFs from context:', context);
 
-        // Get the file paths from the context
-        let basePath: string | undefined;
-        let headPath: string | undefined;
-        let repositoryId: string | undefined;
-        let baseVersion: string | undefined;
-        let headVersion: string | undefined;
+        // For a PR tab, we need to get the PR context from the host
+        const hostContext = SDK.getHost();
+        const config = SDK.getConfiguration();
+        
+        console.log('Host context:', hostContext);
+        console.log('Config:', config);
 
-        // Try different context formats
-        if (context.originalFile && context.modifiedFile) {
-            // Content handler format
-            basePath = context.originalFile.path;
-            headPath = context.modifiedFile.path;
-            repositoryId = context.repositoryId;
-            baseVersion = context.originalFile.version || context.baseVersion;
-            headVersion = context.modifiedFile.version || context.targetVersion;
-        } else if (context.item) {
-            // Alternative format
-            basePath = context.item.path;
-            headPath = context.item.path;
-            repositoryId = context.repositoryId;
-            baseVersion = context.baseVersion;
-            headVersion = context.targetVersion;
-        } else if (context.path) {
-            // Simple path format
-            basePath = context.path;
-            headPath = context.path;
-            repositoryId = context.repositoryId;
-            baseVersion = context.baseCommitId || context.originalCommitId;
-            headVersion = context.targetCommitId || context.modifiedCommitId;
-        }
-
-        if (!basePath || !headPath) {
-            console.warn('No file paths found in context, using sample PDFs');
-            await loadSamplePdfs(diffViewer!);
-            return;
-        }
-
-        // Get project context
+        // Try to get PR information from the page context
         const projectService = await SDK.getService<IProjectPageService>(CommonServiceIds.ProjectPageService);
         const project = await projectService.getProject();
 
         if (!project) {
-            throw new Error('Could not get project context');
+            console.warn('Could not get project context, using sample PDFs');
+            await loadSamplePdfs(diffViewer!);
+            return;
         }
+
+        // Get the navigation service to access PR context
+        const navService = await SDK.getService(CommonServiceIds.HostNavigationService) as any;
+        const currentState = await navService.getCurrentState();
+        
+        console.log('Current navigation state:', currentState);
+        
+        // Try to extract PR ID from the URL or state
+        const pullRequestId = currentState?.pullRequestId || 
+                              parseInt(new URL(window.location.href).searchParams.get('pullRequestId') || '0');
+        
+        if (!pullRequestId) {
+            console.warn('No pull request ID found, using sample PDFs');
+            await loadSamplePdfs(diffViewer!);
+            return;
+        }
+
+        console.log('Pull Request ID:', pullRequestId);
 
         // Get Git client
         const gitClient = getClient(GitRestClient);
+        
+        // Try to get repository ID from the URL
+        const urlParts = window.location.pathname.split('/');
+        const repoIndex = urlParts.indexOf('_git');
+        const repositoryName = repoIndex >= 0 ? urlParts[repoIndex + 1] : '';
+        
+        if (!repositoryName) {
+            console.warn('Could not determine repository name, using sample PDFs');
+            await loadSamplePdfs(diffViewer!);
+            return;
+        }
+
+        // Get the pull request details
+        const pullRequest = await gitClient.getPullRequest(repositoryName, pullRequestId, project.name);
+        console.log('Pull request:', pullRequest);
+
+        // Get the changes in the PR
+        const iterations = await gitClient.getPullRequestIterations(repositoryName, pullRequestId, project.name);
+        if (!iterations || iterations.length === 0) {
+            console.warn('No iterations found in PR, using sample PDFs');
+            await loadSamplePdfs(diffViewer!);
+            return;
+        }
+
+        const latestIteration = iterations[iterations.length - 1];
+        const changes = await gitClient.getPullRequestIterationChanges(
+            repositoryName,
+            pullRequestId,
+            latestIteration.id!,
+            project.name
+        );
+
+        // Find the first PDF file in the changes
+        const pdfChange = changes.changeEntries?.find((change: GitChange) => 
+            change.item?.path?.toLowerCase().endsWith('.pdf')
+        );
+
+        if (!pdfChange || !pdfChange.item) {
+            console.warn('No PDF files found in PR changes, using sample PDFs');
+            await loadSamplePdfs(diffViewer!);
+            return;
+        }
+
+        console.log('Found PDF file:', pdfChange.item.path);
+
+        // Fetch the base and head versions of the PDF
+        const basePath = pdfChange.item.path!;
+        const baseCommitId = pullRequest.lastMergeSourceCommit?.commitId || pullRequest.lastMergeCommit?.commitId;
+        const headCommitId = pullRequest.lastMergeTargetCommit?.commitId;
+
+        if (!baseCommitId || !headCommitId) {
+            console.warn('Could not determine commit IDs, using sample PDFs');
+            await loadSamplePdfs(diffViewer!);
+            return;
+        }
 
         // Fetch the PDF files
-        const baseData = await fetchPdfFile(gitClient, repositoryId || '', basePath, baseVersion || 'GB' + (baseVersion || ''));
-        const headData = await fetchPdfFile(gitClient, repositoryId || '', headPath, headVersion || 'GT' + (headVersion || ''));
+        const baseData = await fetchPdfFile(gitClient, repositoryName, basePath, baseCommitId);
+        const headData = await fetchPdfFile(gitClient, repositoryName, basePath, headCommitId);
 
         if (diffViewer) {
             await diffViewer.loadPdfsFromData(baseData, headData);
@@ -209,9 +254,11 @@ async function loadPdfsFromContext(context: any): Promise<void> {
     }
 }
 
-async function fetchPdfFile(gitClient: GitRestClient, repositoryId: string, path: string, version: string): Promise<Uint8Array> {
+async function fetchPdfFile(gitClient: GitRestClient, repositoryId: string, path: string, commitId: string): Promise<Uint8Array> {
     try {
-        // Fetch the file content
+        console.log(`Fetching PDF: repo=${repositoryId}, path=${path}, commit=${commitId}`);
+        
+        // Fetch the file content at the specific commit
         const item = await gitClient.getItem(
             repositoryId,
             path,
@@ -222,8 +269,8 @@ async function fetchPdfFile(gitClient: GitRestClient, repositoryId: string, path
             false, // latestProcessedChange
             false, // download
             {
-                version: version.replace(/^G[BT]/, ''), // Remove GB or GT prefix
-                versionType: version.startsWith('GB') ? GitVersionType.Branch : (version.startsWith('GT') ? GitVersionType.Tag : GitVersionType.Commit),
+                version: commitId,
+                versionType: GitVersionType.Commit,
                 versionOptions: 0
             }
         );
