@@ -233,9 +233,14 @@ async function fetchPdfFile(gitClient: GitRestClient, repositoryId: string, path
     try {
         console.log(`Fetching PDF: repo=${repositoryId}, path=${path}, commit=${commitId}, project=${projectId}`);
         
-        // Fetch the file content at the specific commit
+        // Fetch the file content at the specific commit with a timeout
         console.log('Calling gitClient.getItem...');
-        const item = await gitClient.getItem(
+        
+        const timeoutPromise = new Promise<never>((_, reject) => {
+            setTimeout(() => reject(new Error('getItem timeout after 10 seconds')), 10000);
+        });
+        
+        const itemPromise = gitClient.getItem(
             repositoryId,
             path,
             projectId, // project
@@ -250,6 +255,8 @@ async function fetchPdfFile(gitClient: GitRestClient, repositoryId: string, path
                 versionOptions: 0
             }
         );
+
+        const item = await Promise.race([itemPromise, timeoutPromise]);
 
         console.log('gitClient.getItem returned:', item ? 'item received' : 'null');
         
