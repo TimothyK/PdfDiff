@@ -33,19 +33,19 @@ async function initialize() {
             if (config.onBuildChanged || config.onViewDisplayed) {
                 // This is a content handler - wait for file information
                 if (config.onBuildChanged) {
-                    config.onBuildChanged(async (args: any) => {
-                        await loadPdfsFromContext(args);
+                    config.onBuildChanged(async () => {
+                        await loadPdfsFromContext();
                     });
                 }
                 
                 if (config.onViewDisplayed) {
-                    config.onViewDisplayed(async (args: any) => {
-                        await loadPdfsFromContext(args);
+                    config.onViewDisplayed(async () => {
+                        await loadPdfsFromContext();
                     });
                 }
             } else {
                 // Try to load from current context
-                await loadPdfsFromContext(config);
+                await loadPdfsFromContext();
             }
 
             if (loading) {
@@ -142,18 +142,10 @@ function setupEventListeners() {
     }
 }
 
-async function loadPdfsFromContext(context: any): Promise<void> {
+async function loadPdfsFromContext(): Promise<void> {
     try {
-        console.log('Loading PDFs from context:', context);
-
-        // Get configuration from Azure DevOps - this should contain PR context for PR tabs
+        // Get configuration and project context from Azure DevOps
         const config = SDK.getConfiguration();
-        const host = SDK.getHost();
-        
-        console.log('SDK Configuration:', config);
-        console.log('SDK Host:', host);
-        
-        // Get project context
         const projectService = await SDK.getService<IProjectPageService>(CommonServiceIds.ProjectPageService);
         const project = await projectService.getProject();
 
@@ -161,50 +153,23 @@ async function loadPdfsFromContext(context: any): Promise<void> {
             throw new Error('Could not get project context from SDK');
         }
 
-        console.log('Project:', project);
-
-        // Try to get PR ID from various possible sources in the SDK
-        let pullRequestId: number = 0;
-        let repositoryId: string = '';
-        
-        // Check if context has PR information
-        if (context && typeof context === 'object') {
-            pullRequestId = context.pullRequestId || context.id || context.pullRequest?.pullRequestId || 0;
-            repositoryId = context.repositoryId || context.repository?.id || context.repository || '';
-            console.log('From context - PR ID:', pullRequestId, 'Repo ID:', repositoryId);
-        }
-        
-        // Try config object
-        if (!pullRequestId && config) {
-            pullRequestId = (config as any).pullRequestId || (config as any).id || (config as any).pullRequest?.pullRequestId || 0;
-            repositoryId = (config as any).repositoryId || (config as any).repository?.id || (config as any).repository || '';
-            console.log('From config - PR ID:', pullRequestId, 'Repo ID:', repositoryId);
-        }
-        
-        // Try host object
-        if (!pullRequestId && host) {
-            pullRequestId = (host as any).pullRequestId || (host as any).id || 0;
-            repositoryId = (host as any).repositoryId || (host as any).repository?.id || (host as any).repository || '';
-            console.log('From host - PR ID:', pullRequestId, 'Repo ID:', repositoryId);
-        }
-        
-        console.log('Resolved - PR ID:', pullRequestId, 'Repository ID:', repositoryId);
+        // Get PR ID and repository ID from config
+        const pullRequestId: number = (config as any).pullRequestId;
+        const repositoryId: string = (config as any).repositoryId;
         
         if (!pullRequestId) {
-            throw new Error(`Pull Request ID not found. Please ensure this tab is opened in a Pull Request context.`);
+            throw new Error('Pull Request ID not found. Please ensure this tab is opened in a Pull Request context.');
         }
         
         if (!repositoryId) {
             throw new Error(`Repository ID not found. PR ID: ${pullRequestId}`);
         }
+        
+        console.log(`Loading PDF diff for PR ${pullRequestId} in repository ${repositoryId}`);
 
-        // Get Git client
+        // Get Git client and pull request details
         const gitClient = getClient(GitRestClient);
-
-        // Get the pull request details
-        console.log(`Fetching PR ${pullRequestId} from repository ${repositoryId} in project ${project.name}`);
         const pullRequest = await gitClient.getPullRequest(repositoryId, pullRequestId, project.name);
-        console.log('Pull request:', pullRequest);
 
         if (!pullRequest) {
             throw new Error(`Could not fetch pull request ${pullRequestId} from repository ${repositoryId}`);
@@ -212,7 +177,6 @@ async function loadPdfsFromContext(context: any): Promise<void> {
 
         // Get the changes in the PR
         const iterations = await gitClient.getPullRequestIterations(repositoryId, pullRequestId, project.name);
-        console.log('Iterations:', iterations);
         
         if (!iterations || iterations.length === 0) {
             throw new Error('No iterations found in Pull Request');
@@ -226,8 +190,6 @@ async function loadPdfsFromContext(context: any): Promise<void> {
             project.name
         );
 
-        console.log('Changes:', changes);
-
         // Find the first PDF file in the changes
         const pdfChange = changes.changeEntries?.find((change: GitChange) => 
             change.item?.path?.toLowerCase().endsWith('.pdf')
@@ -237,14 +199,10 @@ async function loadPdfsFromContext(context: any): Promise<void> {
             throw new Error('No PDF files found in this Pull Request. Please add a PDF file to the PR to use this viewer.');
         }
 
-        console.log('Found PDF file:', pdfChange.item.path);
-
         // Fetch the base and head versions of the PDF
         const pdfPath = pdfChange.item.path!;
         const baseCommitId = pullRequest.lastMergeSourceCommit?.commitId;
         const headCommitId = pullRequest.lastMergeTargetCommit?.commitId;
-
-        console.log('Base commit:', baseCommitId, 'Head commit:', headCommitId);
 
         if (!baseCommitId || !headCommitId) {
             throw new Error('Could not determine source and target commits for this Pull Request');
