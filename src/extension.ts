@@ -173,30 +173,27 @@ async function loadPdfsFromContext(): Promise<void> {
         console.log(`Loading PDF diff for PR ${pullRequestId} in repository ${repositoryId}`);
         console.log(`Project: ${project.name} (${project.id})`);
 
+        // Get commit IDs from the pull request object
+        const baseCommitId = pullRequest.lastMergeSourceCommit?.commitId;
+        const headCommitId = pullRequest.lastMergeTargetCommit?.commitId;
+
+        console.log(`Base commit: ${baseCommitId}, Head commit: ${headCommitId}`);
+        
+        if (!baseCommitId || !headCommitId) {
+            throw new Error('Could not determine source and target commits for this Pull Request');
+        }
+
         // Get Git client
         const gitClient = getClient(GitRestClient);
         
-        console.log('Fetching PR iterations...');
+        console.log('Fetching commit diffs...');
         try {
-            // Get the changes in the PR - try using project ID instead of name
-            const iterations = await gitClient.getPullRequestIterations(repositoryId, pullRequestId, project.id!);
-        
-            if (!iterations || iterations.length === 0) {
-                throw new Error('No iterations found in Pull Request');
-            }
-
-            console.log(`Found ${iterations.length} iterations, fetching changes from latest...`);
-            const latestIteration = iterations[iterations.length - 1];
-            const changes = await gitClient.getPullRequestIterationChanges(
-                repositoryId,
-                pullRequestId,
-                latestIteration.id!,
-                project.id!
-            );
-
-            console.log(`Found ${changes.changeEntries?.length || 0} changes, looking for PDF files...`);
+            // Get the diff between base and head commits
+            const diffs = await gitClient.getCommitDiffs(repositoryId, project.id!, true, 1000, baseCommitId, headCommitId);
+            
+            console.log(`Found ${diffs.changes?.length || 0} changes, looking for PDF files...`);
             // Find the first PDF file in the changes
-            const pdfChange = changes.changeEntries?.find((change: GitChange) => 
+            const pdfChange = diffs.changes?.find((change: GitChange) => 
                 change.item?.path?.toLowerCase().endsWith('.pdf')
             );
 
@@ -208,14 +205,6 @@ async function loadPdfsFromContext(): Promise<void> {
             
             // Fetch the base and head versions of the PDF
             const pdfPath = pdfChange.item.path!;
-            const baseCommitId = pullRequest.lastMergeSourceCommit?.commitId;
-            const headCommitId = pullRequest.lastMergeTargetCommit?.commitId;
-
-            console.log(`Base commit: ${baseCommitId}, Head commit: ${headCommitId}`);
-            
-            if (!baseCommitId || !headCommitId) {
-                throw new Error('Could not determine source and target commits for this Pull Request');
-            }
 
             console.log('Fetching PDF files from commits...');
             // Fetch the PDF files
