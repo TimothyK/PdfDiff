@@ -158,70 +158,69 @@ async function loadPdfsFromContext(context: any): Promise<void> {
         const project = await projectService.getProject();
 
         if (!project) {
-            console.warn('Could not get project context, using sample PDFs');
-            await loadSamplePdfs(diffViewer!);
-            return;
+            throw new Error('Could not get project context from SDK');
         }
 
         console.log('Project:', project);
 
         // Try to get PR ID from various possible sources in the SDK
         let pullRequestId: number = 0;
-        let repositoryName: string = '';
+        let repositoryId: string = '';
         
         // Check if context has PR information
         if (context && typeof context === 'object') {
-            pullRequestId = context.pullRequestId || context.id || 0;
-            repositoryName = context.repositoryName || context.repository || '';
+            pullRequestId = context.pullRequestId || context.id || context.pullRequest?.pullRequestId || 0;
+            repositoryId = context.repositoryId || context.repository?.id || context.repository || '';
+            console.log('From context - PR ID:', pullRequestId, 'Repo ID:', repositoryId);
         }
         
         // Try config object
         if (!pullRequestId && config) {
-            pullRequestId = (config as any).pullRequestId || (config as any).id || 0;
-            repositoryName = (config as any).repositoryName || (config as any).repository || '';
+            pullRequestId = (config as any).pullRequestId || (config as any).id || (config as any).pullRequest?.pullRequestId || 0;
+            repositoryId = (config as any).repositoryId || (config as any).repository?.id || (config as any).repository || '';
+            console.log('From config - PR ID:', pullRequestId, 'Repo ID:', repositoryId);
         }
         
         // Try host object
         if (!pullRequestId && host) {
             pullRequestId = (host as any).pullRequestId || (host as any).id || 0;
-            repositoryName = (host as any).repositoryName || (host as any).repository || '';
+            repositoryId = (host as any).repositoryId || (host as any).repository?.id || (host as any).repository || '';
+            console.log('From host - PR ID:', pullRequestId, 'Repo ID:', repositoryId);
         }
         
-        console.log('Resolved - PR ID:', pullRequestId, 'Repository:', repositoryName);
+        console.log('Resolved - PR ID:', pullRequestId, 'Repository ID:', repositoryId);
         
-        if (!pullRequestId || !repositoryName) {
-            console.warn('Could not determine PR ID or repository, using sample PDFs');
-            console.warn('URL:', window.location.href);
-            await loadSamplePdfs(diffViewer!);
-            return;
+        if (!pullRequestId) {
+            throw new Error(`Pull Request ID not found. Please ensure this tab is opened in a Pull Request context.`);
+        }
+        
+        if (!repositoryId) {
+            throw new Error(`Repository ID not found. PR ID: ${pullRequestId}`);
         }
 
         // Get Git client
         const gitClient = getClient(GitRestClient);
 
         // Get the pull request details
-        const pullRequest = await gitClient.getPullRequest(repositoryName, pullRequestId, project.name);
+        console.log(`Fetching PR ${pullRequestId} from repository ${repositoryId} in project ${project.name}`);
+        const pullRequest = await gitClient.getPullRequest(repositoryId, pullRequestId, project.name);
         console.log('Pull request:', pullRequest);
 
         if (!pullRequest) {
-            console.warn('Could not fetch pull request, using sample PDFs');
-            await loadSamplePdfs(diffViewer!);
-            return;
+            throw new Error(`Could not fetch pull request ${pullRequestId} from repository ${repositoryId}`);
         }
 
         // Get the changes in the PR
-        const iterations = await gitClient.getPullRequestIterations(repositoryName, pullRequestId, project.name);
+        const iterations = await gitClient.getPullRequestIterations(repositoryId, pullRequestId, project.name);
         console.log('Iterations:', iterations);
         
         if (!iterations || iterations.length === 0) {
-            console.warn('No iterations found in PR, using sample PDFs');
-            await loadSamplePdfs(diffViewer!);
-            return;
+            throw new Error('No iterations found in Pull Request');
         }
 
         const latestIteration = iterations[iterations.length - 1];
         const changes = await gitClient.getPullRequestIterationChanges(
-            repositoryName,
+            repositoryId,
             pullRequestId,
             latestIteration.id!,
             project.name
@@ -235,9 +234,7 @@ async function loadPdfsFromContext(context: any): Promise<void> {
         );
 
         if (!pdfChange || !pdfChange.item) {
-            console.warn('No PDF files found in PR changes, using sample PDFs');
-            await loadSamplePdfs(diffViewer!);
-            return;
+            throw new Error('No PDF files found in this Pull Request. Please add a PDF file to the PR to use this viewer.');
         }
 
         console.log('Found PDF file:', pdfChange.item.path);
@@ -250,14 +247,12 @@ async function loadPdfsFromContext(context: any): Promise<void> {
         console.log('Base commit:', baseCommitId, 'Head commit:', headCommitId);
 
         if (!baseCommitId || !headCommitId) {
-            console.warn('Could not determine commit IDs, using sample PDFs');
-            await loadSamplePdfs(diffViewer!);
-            return;
+            throw new Error('Could not determine source and target commits for this Pull Request');
         }
 
         // Fetch the PDF files
-        const baseData = await fetchPdfFile(gitClient, repositoryName, pdfPath, baseCommitId);
-        const headData = await fetchPdfFile(gitClient, repositoryName, pdfPath, headCommitId);
+        const baseData = await fetchPdfFile(gitClient, repositoryId, pdfPath, baseCommitId);
+        const headData = await fetchPdfFile(gitClient, repositoryId, pdfPath, headCommitId);
 
         if (diffViewer) {
             await diffViewer.loadPdfsFromData(baseData, headData);
@@ -265,8 +260,7 @@ async function loadPdfsFromContext(context: any): Promise<void> {
 
     } catch (error) {
         console.error('Error loading PDFs from context:', error);
-        // Fallback to sample PDFs
-        await loadSamplePdfs(diffViewer!);
+        throw error;
     }
 }
 
@@ -322,42 +316,6 @@ function setActiveButton(activeId: string) {
             }
         }
     });
-}
-
-// Commented out - currently unused but may be needed for real implementation
-// function getSamplePdfUrl(type: 'base' | 'head'): string {
-//     // In a real implementation, this would construct the URL to fetch the PDF from Azure DevOps
-//     // For now, return placeholder URLs
-//     return `https://example.com/sample-${type}.pdf`;
-// }
-
-async function loadSamplePdfs(viewer: PdfDiffViewer): Promise<void> {
-    // Create sample PDF data for demonstration
-    // In a real implementation, this would fetch actual PDF files from the PR
-    
-    // For demo purposes, we'll create simple PDFs using canvas
-    const basePdfData = await createSamplePdf('Original PDF Content', 3);
-    const headPdfData = await createSamplePdf('Modified PDF Content', 3);
-
-    await viewer.loadPdfsFromData(basePdfData, headPdfData);
-}
-
-async function createSamplePdf(_text: string, _numPages: number): Promise<Uint8Array> {
-    // This is a simplified demo implementation
-    // In a real scenario, PDFs would be fetched from the PR files
-    
-    // For now, we'll create a minimal PDF structure
-    // This is just for demonstration and won't work with real PDF.js
-    // You would need to fetch actual PDF files from Azure DevOps API
-    
-    const pdfHeader = '%PDF-1.4\n';
-    const pdfContent = `1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n`;
-    
-    // Create a basic PDF structure (this is simplified and may not work with pdf.js)
-    // In production, you'd fetch real PDFs from the repository
-    const content = pdfHeader + pdfContent;
-    
-    return new Uint8Array(Array.from(content).map(c => c.charCodeAt(0)));
 }
 
 // Cleanup on unload
