@@ -1,8 +1,8 @@
 import * as pdfjsLib from 'pdfjs-dist';
 
-// Configure PDF.js worker - use relative path from the HTML file
-// The worker file is in the same dist directory as the HTML and JS files
-pdfjsLib.GlobalWorkerOptions.workerSrc = './pdf.worker.min.mjs';
+// Disable worker - run PDF.js in main thread
+// This is simpler and avoids CORS/module loading issues in Azure DevOps extension environment
+pdfjsLib.GlobalWorkerOptions.workerSrc = '';
 
 export interface PdfPage {
     pageNumber: number;
