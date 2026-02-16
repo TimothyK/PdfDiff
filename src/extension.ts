@@ -3,13 +3,12 @@ import { PdfDiffViewer } from './pr-diff-viewer';
 import { CommonServiceIds, IProjectPageService, getClient } from "azure-devops-extension-api";
 import { GitRestClient, VersionControlRecursionType, GitVersionType } from "azure-devops-extension-api/Git";
 
-// Initialize the Azure DevOps SDK
-SDK.init();
-
 let diffViewer: PdfDiffViewer | null = null;
 
 async function initialize() {
     try {
+        // Initialize the Azure DevOps SDK (only if not already initialized)
+        SDK.init();
         await SDK.ready();
         
         console.log('PDF Diff Viewer extension loaded');
@@ -186,7 +185,7 @@ async function loadPdfsFromContext(): Promise<void> {
 
         // For now, let's hardcode a PDF path to test if fetching works
         // TODO: Need to find a way to get the list of changed files without hanging API calls
-        const pdfPath = '/Test.pdf'; // Replace with actual path from your PR
+        const pdfPath = '/116U005299-03-BOL.pdf'; // Replace with actual path from your PR
         
         console.log(`Testing with PDF path: ${pdfPath}`);
 
