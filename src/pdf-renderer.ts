@@ -1,7 +1,27 @@
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 
-// Configure PDF.js worker to use the bundled legacy worker file
-pdfjsLib.GlobalWorkerOptions.workerSrc = './pdf.worker.min.mjs';
+// Fetch the worker file and create a blob URL for it
+async function setupWorker() {
+    try {
+        const workerUrl = new URL('./pdf.worker.min.mjs', window.location.href).href;
+        const response = await fetch(workerUrl);
+        const blob = await response.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        pdfjsLib.GlobalWorkerOptions.workerSrc = blobUrl;
+    } catch (error) {
+        console.error('Failed to setup worker with blob URL:', error);
+        // Fallback to direct path
+        pdfjsLib.GlobalWorkerOptions.workerSrc = './pdf.worker.min.mjs';
+    }
+}
+
+let workerSetupPromise: Promise<void> | null = null;
+function ensureWorkerSetup(): Promise<void> {
+    if (!workerSetupPromise) {
+        workerSetupPromise = setupWorker();
+    }
+    return workerSetupPromise;
+}
 
 export interface PdfPage {
     pageNumber: number;
@@ -15,6 +35,7 @@ export class PdfRenderer {
     private scale: number = 1.5;
 
     async loadPdf(url: string): Promise<void> {
+        await ensureWorkerSetup();
         try {
             this.pdfDocument = await pdfjsLib.getDocument(url).promise;
         } catch (error) {
@@ -24,6 +45,7 @@ export class PdfRenderer {
     }
 
     async loadPdfFromData(data: Uint8Array): Promise<void> {
+        await ensureWorkerSetup();
         try {
             this.pdfDocument = await pdfjsLib.getDocument({ data }).promise;
         } catch (error) {
