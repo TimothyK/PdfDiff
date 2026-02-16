@@ -6,10 +6,13 @@ import { GitRestClient, VersionControlRecursionType, GitVersionType } from "azur
 let diffViewer: PdfDiffViewer | null = null;
 
 async function initialize() {
+    console.log('Initialize function called');
     try {
+        console.log('Calling SDK.ready()...');
         // Don't call SDK.init() - the SDK is already initialized by Azure DevOps parent frame
         await SDK.ready();
         
+        console.log('SDK.ready() completed');
         console.log('PDF Diff Viewer extension loaded');
 
         const loading = document.getElementById('loading');
@@ -275,8 +278,11 @@ window.addEventListener('beforeunload', () => {
 });
 
 // Initialize when DOM is ready
+console.log('Extension script loaded, readyState:', document.readyState);
 if (document.readyState === 'loading') {
+    console.log('Waiting for DOMContentLoaded');
     document.addEventListener('DOMContentLoaded', initialize);
 } else {
+    console.log('DOM already ready, initializing immediately');
     initialize();
 }
