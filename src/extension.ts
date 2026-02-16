@@ -7,8 +7,7 @@ let diffViewer: PdfDiffViewer | null = null;
 
 async function initialize() {
     try {
-        // Initialize the Azure DevOps SDK (only if not already initialized)
-        SDK.init();
+        // Don't call SDK.init() - the SDK is already initialized by Azure DevOps parent frame
         await SDK.ready();
         
         console.log('PDF Diff Viewer extension loaded');
