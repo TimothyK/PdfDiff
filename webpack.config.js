@@ -1,5 +1,7 @@
 const path = require('path');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
+const webpack = require('webpack');
+const fs = require('fs');
 
 module.exports = {
   entry: './src/extension.ts',
@@ -26,9 +28,16 @@ module.exports = {
       patterns: [
         { from: 'src/**/*.html', to: '[name][ext]' },
         { from: 'src/**/*.css', to: '[name][ext]' },
-        { from: 'images', to: 'images', noErrorOnMissing: true },
-        { from: 'node_modules/pdfjs-dist/legacy/build/pdf.worker.min.mjs', to: 'pdf.worker.min.mjs' }
+        { from: 'images', to: 'images', noErrorOnMissing: true }
       ],
     }),
+    new webpack.DefinePlugin({
+      'PDF_WORKER_SRC': JSON.stringify(
+        fs.readFileSync(
+          path.join(__dirname, 'node_modules/pdfjs-dist/legacy/build/pdf.worker.min.mjs'),
+          'utf-8'
+        )
+      )
+    })
   ],
 };

@@ -1,8 +1,23 @@
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 
-// Disable worker entirely - this will run PDF.js in the main thread
-// Set workerPort to null to avoid worker creation
-(pdfjsLib.GlobalWorkerOptions as any).workerPort = null;
+// Create worker from inline source code
+declare const PDF_WORKER_SRC: string;
+
+let workerInitialized = false;
+function initializeWorker() {
+    if (!workerInitialized) {
+        try {
+            // Create a blob from the worker source code
+            const blob = new Blob([PDF_WORKER_SRC], { type: 'application/javascript' });
+            const workerUrl = URL.createObjectURL(blob);
+            pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
+            workerInitialized = true;
+        } catch (error) {
+            console.error('Failed to initialize PDF worker:', error);
+            throw error;
+        }
+    }
+}
 
 export interface PdfPage {
     pageNumber: number;
@@ -16,6 +31,7 @@ export class PdfRenderer {
     private scale: number = 1.5;
 
     async loadPdf(url: string): Promise<void> {
+        initializeWorker();
         try {
             this.pdfDocument = await pdfjsLib.getDocument(url).promise;
         } catch (error) {
@@ -25,6 +41,7 @@ export class PdfRenderer {
     }
 
     async loadPdfFromData(data: Uint8Array): Promise<void> {
+        initializeWorker();
         try {
             this.pdfDocument = await pdfjsLib.getDocument({ data }).promise;
         } catch (error) {
