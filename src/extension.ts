@@ -146,14 +146,14 @@ async function loadPdfsFromContext(context: any): Promise<void> {
     try {
         console.log('Loading PDFs from context:', context);
 
-        // For a PR tab, we need to get the PR context from the host
-        const hostContext = SDK.getHost();
+        // Get configuration from Azure DevOps - this should contain PR context for PR tabs
         const config = SDK.getConfiguration();
+        const host = SDK.getHost();
         
-        console.log('Host context:', hostContext);
-        console.log('Config:', config);
-
-        // Try to get PR information from the page context
+        console.log('SDK Configuration:', config);
+        console.log('SDK Host:', host);
+        
+        // Get project context
         const projectService = await SDK.getService<IProjectPageService>(CommonServiceIds.ProjectPageService);
         const project = await projectService.getProject();
 
@@ -163,44 +163,56 @@ async function loadPdfsFromContext(context: any): Promise<void> {
             return;
         }
 
-        // Get the navigation service to access PR context
-        const navService = await SDK.getService(CommonServiceIds.HostNavigationService) as any;
-        const currentState = await navService.getCurrentState();
+        console.log('Project:', project);
+
+        // Try to get PR ID from various possible sources in the SDK
+        let pullRequestId: number = 0;
+        let repositoryName: string = '';
         
-        console.log('Current navigation state:', currentState);
+        // Check if context has PR information
+        if (context && typeof context === 'object') {
+            pullRequestId = context.pullRequestId || context.id || 0;
+            repositoryName = context.repositoryName || context.repository || '';
+        }
         
-        // Try to extract PR ID from the URL or state
-        const pullRequestId = currentState?.pullRequestId || 
-                              parseInt(new URL(window.location.href).searchParams.get('pullRequestId') || '0');
+        // Try config object
+        if (!pullRequestId && config) {
+            pullRequestId = (config as any).pullRequestId || (config as any).id || 0;
+            repositoryName = (config as any).repositoryName || (config as any).repository || '';
+        }
         
-        if (!pullRequestId) {
-            console.warn('No pull request ID found, using sample PDFs');
+        // Try host object
+        if (!pullRequestId && host) {
+            pullRequestId = (host as any).pullRequestId || (host as any).id || 0;
+            repositoryName = (host as any).repositoryName || (host as any).repository || '';
+        }
+        
+        console.log('Resolved - PR ID:', pullRequestId, 'Repository:', repositoryName);
+        
+        if (!pullRequestId || !repositoryName) {
+            console.warn('Could not determine PR ID or repository, using sample PDFs');
+            console.warn('URL:', window.location.href);
             await loadSamplePdfs(diffViewer!);
             return;
         }
-
-        console.log('Pull Request ID:', pullRequestId);
 
         // Get Git client
         const gitClient = getClient(GitRestClient);
-        
-        // Try to get repository ID from the URL
-        const urlParts = window.location.pathname.split('/');
-        const repoIndex = urlParts.indexOf('_git');
-        const repositoryName = repoIndex >= 0 ? urlParts[repoIndex + 1] : '';
-        
-        if (!repositoryName) {
-            console.warn('Could not determine repository name, using sample PDFs');
-            await loadSamplePdfs(diffViewer!);
-            return;
-        }
 
         // Get the pull request details
         const pullRequest = await gitClient.getPullRequest(repositoryName, pullRequestId, project.name);
         console.log('Pull request:', pullRequest);
 
+        if (!pullRequest) {
+            console.warn('Could not fetch pull request, using sample PDFs');
+            await loadSamplePdfs(diffViewer!);
+            return;
+        }
+
         // Get the changes in the PR
         const iterations = await gitClient.getPullRequestIterations(repositoryName, pullRequestId, project.name);
+        console.log('Iterations:', iterations);
+        
         if (!iterations || iterations.length === 0) {
             console.warn('No iterations found in PR, using sample PDFs');
             await loadSamplePdfs(diffViewer!);
@@ -214,6 +226,8 @@ async function loadPdfsFromContext(context: any): Promise<void> {
             latestIteration.id!,
             project.name
         );
+
+        console.log('Changes:', changes);
 
         // Find the first PDF file in the changes
         const pdfChange = changes.changeEntries?.find((change: GitChange) => 
@@ -229,9 +243,11 @@ async function loadPdfsFromContext(context: any): Promise<void> {
         console.log('Found PDF file:', pdfChange.item.path);
 
         // Fetch the base and head versions of the PDF
-        const basePath = pdfChange.item.path!;
-        const baseCommitId = pullRequest.lastMergeSourceCommit?.commitId || pullRequest.lastMergeCommit?.commitId;
+        const pdfPath = pdfChange.item.path!;
+        const baseCommitId = pullRequest.lastMergeSourceCommit?.commitId;
         const headCommitId = pullRequest.lastMergeTargetCommit?.commitId;
+
+        console.log('Base commit:', baseCommitId, 'Head commit:', headCommitId);
 
         if (!baseCommitId || !headCommitId) {
             console.warn('Could not determine commit IDs, using sample PDFs');
@@ -240,8 +256,8 @@ async function loadPdfsFromContext(context: any): Promise<void> {
         }
 
         // Fetch the PDF files
-        const baseData = await fetchPdfFile(gitClient, repositoryName, basePath, baseCommitId);
-        const headData = await fetchPdfFile(gitClient, repositoryName, basePath, headCommitId);
+        const baseData = await fetchPdfFile(gitClient, repositoryName, pdfPath, baseCommitId);
+        const headData = await fetchPdfFile(gitClient, repositoryName, pdfPath, headCommitId);
 
         if (diffViewer) {
             await diffViewer.loadPdfsFromData(baseData, headData);
