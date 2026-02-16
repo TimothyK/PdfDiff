@@ -1,7 +1,7 @@
 import * as SDK from "azure-devops-extension-sdk";
 import { PdfDiffViewer } from './pr-diff-viewer';
 import { CommonServiceIds, IProjectPageService, getClient } from "azure-devops-extension-api";
-import { GitRestClient, VersionControlRecursionType, GitVersionType, GitChange } from "azure-devops-extension-api/Git";
+import { GitRestClient, VersionControlRecursionType, GitVersionType } from "azure-devops-extension-api/Git";
 
 // Initialize the Azure DevOps SDK
 SDK.init();
@@ -172,6 +172,7 @@ async function loadPdfsFromContext(): Promise<void> {
         
         console.log(`Loading PDF diff for PR ${pullRequestId} in repository ${repositoryId}`);
         console.log(`Project: ${project.name} (${project.id})`);
+        console.log('Pull request commits:', pullRequest.commits);
 
         // Get commit IDs from the pull request object
         const baseCommitId = pullRequest.lastMergeSourceCommit?.commitId;
@@ -183,30 +184,17 @@ async function loadPdfsFromContext(): Promise<void> {
             throw new Error('Could not determine source and target commits for this Pull Request');
         }
 
+        // For now, let's hardcode a PDF path to test if fetching works
+        // TODO: Need to find a way to get the list of changed files without hanging API calls
+        const pdfPath = '/Test.pdf'; // Replace with actual path from your PR
+        
+        console.log(`Testing with PDF path: ${pdfPath}`);
+
         // Get Git client
         const gitClient = getClient(GitRestClient);
         
-        console.log('Fetching commit diffs...');
+        console.log('Fetching PDF files from commits...');
         try {
-            // Get the diff between base and head commits
-            const diffs = await gitClient.getCommitDiffs(repositoryId, project.id!, true, 1000, baseCommitId, headCommitId);
-            
-            console.log(`Found ${diffs.changes?.length || 0} changes, looking for PDF files...`);
-            // Find the first PDF file in the changes
-            const pdfChange = diffs.changes?.find((change: GitChange) => 
-                change.item?.path?.toLowerCase().endsWith('.pdf')
-            );
-
-            if (!pdfChange || !pdfChange.item) {
-                throw new Error('No PDF files found in this Pull Request. Please add a PDF file to the PR to use this viewer.');
-            }
-
-            console.log(`Found PDF file: ${pdfChange.item.path}`);
-            
-            // Fetch the base and head versions of the PDF
-            const pdfPath = pdfChange.item.path!;
-
-            console.log('Fetching PDF files from commits...');
             // Fetch the PDF files
             const baseData = await fetchPdfFile(gitClient, repositoryId, pdfPath, baseCommitId);
             const headData = await fetchPdfFile(gitClient, repositoryId, pdfPath, headCommitId);
