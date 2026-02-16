@@ -2,7 +2,7 @@
   "manifestVersion": 1,
   "id": "pdf-diff-viewer",
   "name": "PDF Diff Viewer",
-  "version": "0.0.0",
+  "version": "0.0.3",
   "publisher": "CodeMonkeyProjectiles",
   "description": "View PDF file diffs in pull requests with side-by-side, inline, and pixel diff views",
   "categories": [
@@ -22,7 +22,7 @@
     }
   ],
   "icons": {
-    "default": "images/logo.svg"
+    "default": "images/logo.png"
   },
   "content": {
     "details": {
