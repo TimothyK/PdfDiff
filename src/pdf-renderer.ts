@@ -1,7 +1,7 @@
 import * as pdfjsLib from 'pdfjs-dist';
 
-// Configure PDF.js worker - using latest stable version
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.js`;
+// Configure PDF.js worker to use the bundled worker file
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'pdf.worker.min.mjs';
 
 export interface PdfPage {
     pageNumber: number;

@@ -26,7 +26,8 @@ module.exports = {
       patterns: [
         { from: 'src/**/*.html', to: '[name][ext]' },
         { from: 'src/**/*.css', to: '[name][ext]' },
-        { from: 'images', to: 'images', noErrorOnMissing: true }
+        { from: 'images', to: 'images', noErrorOnMissing: true },
+        { from: 'node_modules/pdfjs-dist/build/pdf.worker.min.mjs', to: 'pdf.worker.min.mjs' }
       ],
     }),
   ],
