@@ -8,8 +8,16 @@ let diffViewer: PdfDiffViewer | null = null;
 async function initialize() {
     console.log('Initialize function called');
     try {
+        console.log('Calling SDK.init()...');
+        // Try to init SDK, ignore error if already initialized
+        try {
+            SDK.init();
+            console.log('SDK.init() completed');
+        } catch (initError) {
+            console.log('SDK.init() threw error (expected if already loaded):', initError);
+        }
+        
         console.log('Calling SDK.ready()...');
-        // Don't call SDK.init() - the SDK is already initialized by Azure DevOps parent frame
         await SDK.ready();
         
         console.log('SDK.ready() completed');
