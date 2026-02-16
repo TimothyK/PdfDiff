@@ -1,7 +1,7 @@
 import * as SDK from "azure-devops-extension-sdk";
 import { PdfDiffViewer } from './pr-diff-viewer';
-import { CommonServiceIds, IProjectPageService, getClient } from "azure-devops-extension-api";
-import { GitRestClient, VersionControlRecursionType, GitVersionType } from "azure-devops-extension-api/Git";
+import { CommonServiceIds, IProjectPageService } from "azure-devops-extension-api";
+import { GitApi } from './gitApi';
 
 let diffViewer: PdfDiffViewer | null = null;
 
@@ -199,18 +199,18 @@ async function loadPdfsFromContext(): Promise<void> {
         
         console.log(`Testing with PDF path: ${pdfPath}`);
 
-        // Get Git client
-        const gitClient = getClient(GitRestClient);
+        // Create Git API client
+        const gitApi = new GitApi();
         
         console.log('Fetching PDF files from commits...');
         try {
             // Fetch the PDF files
             console.log('About to fetch base PDF...');
-            const baseData = await fetchPdfFile(gitClient, repositoryId, pdfPath, baseCommitId, project.id!);
+            const baseData = await gitApi.getItemContent(project.name, repositoryId, pdfPath, baseCommitId);
             console.log('Base PDF fetched successfully');
             
             console.log('About to fetch head PDF...');
-            const headData = await fetchPdfFile(gitClient, repositoryId, pdfPath, headCommitId, project.id!);
+            const headData = await gitApi.getItemContent(project.name, repositoryId, pdfPath, headCommitId);
             console.log('Head PDF fetched successfully');
 
             console.log('PDF files fetched, rendering diff...');
@@ -225,58 +225,6 @@ async function loadPdfsFromContext(): Promise<void> {
 
     } catch (error) {
         console.error('Error loading PDFs from context:', error);
-        throw error;
-    }
-}
-
-async function fetchPdfFile(gitClient: GitRestClient, repositoryId: string, path: string, commitId: string, projectId: string): Promise<Uint8Array> {
-    try {
-        console.log(`Fetching PDF: repo=${repositoryId}, path=${path}, commit=${commitId}, project=${projectId}`);
-        
-        // Fetch the file content at the specific commit with a timeout
-        console.log('Calling gitClient.getItem...');
-        
-        const timeoutPromise = new Promise<never>((_, reject) => {
-            setTimeout(() => reject(new Error('getItem timeout after 10 seconds')), 10000);
-        });
-        
-        const itemPromise = gitClient.getItem(
-            repositoryId,
-            path,
-            projectId, // project
-            undefined, // scopePath
-            VersionControlRecursionType.None,
-            false, // includeContentMetadata
-            false, // latestProcessedChange
-            false, // download
-            {
-                version: commitId,
-                versionType: GitVersionType.Commit,
-                versionOptions: 0
-            }
-        );
-
-        const item = await Promise.race([itemPromise, timeoutPromise]);
-
-        console.log('gitClient.getItem returned:', item ? 'item received' : 'null');
-        
-        if (!item || !item.content) {
-            throw new Error(`Could not fetch file content for ${path}`);
-        }
-
-        console.log('Converting base64 content to Uint8Array...');
-
-        // Convert base64 content to Uint8Array
-        const base64Content = item.content;
-        const binaryString = atob(base64Content);
-        const bytes = new Uint8Array(binaryString.length);
-        for (let i = 0; i < binaryString.length; i++) {
-            bytes[i] = binaryString.charCodeAt(i);
-        }
-
-        return bytes;
-    } catch (error) {
-        console.error(`Error fetching PDF file ${path}:`, error);
         throw error;
     }
 }
