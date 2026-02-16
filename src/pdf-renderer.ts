@@ -1,8 +1,7 @@
-import * as pdfjsLib from 'pdfjs-dist';
+import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 
-// Disable worker - run PDF.js in main thread
-// This is simpler and avoids CORS/module loading issues in Azure DevOps extension environment
-pdfjsLib.GlobalWorkerOptions.workerSrc = '';
+// Configure PDF.js worker to use the bundled legacy worker file
+pdfjsLib.GlobalWorkerOptions.workerSrc = './pdf.worker.min.mjs';
 
 export interface PdfPage {
     pageNumber: number;

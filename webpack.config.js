@@ -27,7 +27,7 @@ module.exports = {
         { from: 'src/**/*.html', to: '[name][ext]' },
         { from: 'src/**/*.css', to: '[name][ext]' },
         { from: 'images', to: 'images', noErrorOnMissing: true },
-        { from: 'node_modules/pdfjs-dist/build/pdf.worker.min.mjs', to: 'pdf.worker.min.mjs' }
+        { from: 'node_modules/pdfjs-dist/legacy/build/pdf.worker.min.mjs', to: 'pdf.worker.min.mjs' }
       ],
     }),
   ],
