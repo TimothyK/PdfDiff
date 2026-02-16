@@ -199,8 +199,11 @@ async function loadPdfsFromContext(): Promise<void> {
         
         console.log(`Testing with PDF path: ${pdfPath}`);
 
-        // Create Git API client
-        const gitApi = new GitApi();
+        // Create Git API client with base URI
+        const webContext = SDK.getWebContext() as any;
+        const baseUri = webContext.host?.uri || `https://dev.azure.com/${webContext.organization?.name || ''}/`;
+        console.log(`Base URI: ${baseUri}`);
+        const gitApi = new GitApi(baseUri);
         
         console.log('Fetching PDF files from commits...');
         try {

@@ -1,12 +1,8 @@
-import * as SDK from "azure-devops-extension-sdk";
-
 export class GitApi {
+    constructor(private baseUri: string) {}
+
     private getApiBaseUrl(projectName: string): string {
-        const webContext = SDK.getWebContext() as any;
-        // Azure DevOps URL is typically https://dev.azure.com/{organization}
-        // webContext contains the host property in the actual runtime object
-        const baseUri = webContext.host?.uri || `https://dev.azure.com/${webContext.organization?.name || ''}/`;
-        return `${baseUri}${projectName}/_apis`;
+        return `${this.baseUri}${projectName}/_apis`;
     }
 
     public async getItemContent(
