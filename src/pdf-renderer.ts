@@ -1,7 +1,17 @@
 import * as pdfjsLib from 'pdfjs-dist';
+import * as SDK from "azure-devops-extension-sdk";
 
-// Configure PDF.js worker to use the bundled worker file
-pdfjsLib.GlobalWorkerOptions.workerSrc = 'pdf.worker.min.mjs';
+// Configure PDF.js worker - will be set after SDK initializes
+let workerInitialized = false;
+
+function ensureWorkerInitialized() {
+    if (!workerInitialized) {
+        // Get the base URI for the extension and construct the worker path
+        const baseUri = SDK.getExtensionContext().baseUri || '';
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `${baseUri}dist/pdf.worker.min.mjs`;
+        workerInitialized = true;
+    }
+}
 
 export interface PdfPage {
     pageNumber: number;
@@ -15,6 +25,7 @@ export class PdfRenderer {
     private scale: number = 1.5;
 
     async loadPdf(url: string): Promise<void> {
+        ensureWorkerInitialized();
         try {
             this.pdfDocument = await pdfjsLib.getDocument(url).promise;
         } catch (error) {
@@ -24,6 +35,7 @@ export class PdfRenderer {
     }
 
     async loadPdfFromData(data: Uint8Array): Promise<void> {
+        ensureWorkerInitialized();
         try {
             this.pdfDocument = await pdfjsLib.getDocument({ data }).promise;
         } catch (error) {
