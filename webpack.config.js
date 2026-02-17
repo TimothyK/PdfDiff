@@ -4,7 +4,7 @@ const webpack = require('webpack');
 const fs = require('fs');
 
 module.exports = {
-  entry: './src/extension.ts',
+  entry: './src/extension-minimal.ts',
   module: {
     rules: [
       {
