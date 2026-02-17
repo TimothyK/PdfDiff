@@ -166,6 +166,8 @@ async function loadPdfsFromContext(): Promise<void> {
         const repositoryId: string = (config as any).repositoryId;
         const pullRequest = (config as any).pullRequest;
         
+        console.log('Full pullRequest object:', JSON.stringify(pullRequest, null, 2));
+        
         if (!pullRequestId) {
             throw new Error('Pull Request ID not found. Please ensure this tab is opened in a Pull Request context.');
         }
@@ -199,16 +201,31 @@ async function loadPdfsFromContext(): Promise<void> {
         console.log(`Testing with PDF path: ${pdfPath}`);
 
         // Get base URI for API calls
-        // Extension runs in an iframe, so use document.referrer to get the parent Azure DevOps URL
-        // URL format: https://dev.azure.com/{organization}/{project}/_git/{repo}/pullrequest/{id}
-        const parentUrl = document.referrer || window.location.href;
-        console.log('Parent URL:', parentUrl);
+        // Try to extract from pullRequest object which might have repository URL
+        const repoUrl = pullRequest?.repository?.url || pullRequest?.repository?.remoteUrl || '';
+        console.log('Repository URL from pullRequest:', repoUrl);
         
-        // Extract organization from URL
-        const urlMatch = parentUrl.match(/https?:\/\/[^\/]+\/([^\/]+)\//);
-        const organization = urlMatch ? urlMatch[1] : '';
+        // Extract base URL from repository URL if available
+        // Format: https://dev.azure.com/{org}/_apis/git/repositories/{id}
+        let baseUri = 'https://dev.azure.com';
+        if (repoUrl) {
+            const repoUrlMatch = repoUrl.match(/(https?:\/\/[^\/]+\/[^\/]+)/);
+            if (repoUrlMatch) {
+                baseUri = repoUrlMatch[1];
+            }
+        }
         
-        const baseUri = `https://dev.azure.com/${organization}`;
+        // Fallback: try document.referrer
+        if (baseUri === 'https://dev.azure.com') {
+            const parentUrl = document.referrer || window.location.href;
+            console.log('Parent URL:', parentUrl);
+            const urlMatch = parentUrl.match(/https?:\/\/[^\/]+\/([^\/]+)\//);
+            const organization = urlMatch ? urlMatch[1] : '';
+            if (organization) {
+                baseUri = `https://dev.azure.com/${organization}`;
+            }
+        }
+        
         console.log(`Base URI: ${baseUri}`);
         
         console.log('Fetching PDF files from commits...');
