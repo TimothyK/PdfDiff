@@ -23,6 +23,10 @@ module.exports = {
     libraryTarget: 'umd',
     globalObject: 'this',
   },
+  externals: {
+    'azure-devops-extension-sdk': 'SDK',
+    'azure-devops-extension-api': 'API'
+  },
   plugins: [
     new CopyWebpackPlugin({
       patterns: [
