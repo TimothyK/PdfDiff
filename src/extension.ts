@@ -110,8 +110,10 @@ function setupEventListeners() {
 
     if (inlineBtn) {
         inlineBtn.addEventListener('click', () => {
+            console.log('Inline button clicked');
             setActiveButton('inline-btn');
             if (diffViewer) {
+                console.log('Calling diffViewer.render(inline)');
                 diffViewer.render('inline');
             }
         });
@@ -119,8 +121,10 @@ function setupEventListeners() {
 
     if (pixelDiffBtn) {
         pixelDiffBtn.addEventListener('click', () => {
+            console.log('Pixel diff button clicked');
             setActiveButton('pixel-diff-btn');
             if (diffViewer) {
+                console.log('Calling diffViewer.render(pixel-diff)');
                 diffViewer.render('pixel-diff');
             }
         });
