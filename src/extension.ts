@@ -200,18 +200,20 @@ async function loadPdfsFromContext(): Promise<void> {
 
         // Get base URI for API calls
         const webContext = SDK.getWebContext() as any;
-        const baseUri = webContext.host?.uri || `https://dev.azure.com/${webContext.organization?.name || ''}/`;
-        console.log(`Base URI: ${baseUri}`);
+        const baseUri = webContext.host?.uri || `https://dev.azure.com/${webContext.organization?.name || ''}`;
+        // Remove trailing slash if present
+        const cleanBaseUri = baseUri.replace(/\/$/, '');
+        console.log(`Base URI: ${cleanBaseUri}`);
         
         console.log('Fetching PDF files from commits...');
         try {
             // Fetch the PDF files using fetch directly
             console.log('About to fetch base PDF...');
-            const baseData = await fetchPdfFile(baseUri, project.name, repositoryId, pdfPath, baseCommitId);
+            const baseData = await fetchPdfFile(cleanBaseUri, project.name, repositoryId, pdfPath, baseCommitId);
             console.log('Base PDF fetched successfully');
             
             console.log('About to fetch head PDF...');
-            const headData = await fetchPdfFile(baseUri, project.name, repositoryId, pdfPath, headCommitId);
+            const headData = await fetchPdfFile(cleanBaseUri, project.name, repositoryId, pdfPath, headCommitId);
             console.log('Head PDF fetched successfully');
 
             console.log('PDF files fetched, rendering diff...');
@@ -231,7 +233,7 @@ async function loadPdfsFromContext(): Promise<void> {
 }
 
 async function fetchPdfFile(baseUri: string, projectName: string, repositoryId: string, path: string, commitId: string): Promise<Uint8Array> {
-    const apiUrl = `${baseUri}${projectName}/_apis/git/repositories/${repositoryId}/items?path=${encodeURIComponent(path)}&versionType=commit&version=${commitId}&includeContent=true&api-version=7.0`;
+    const apiUrl = `${baseUri}/${projectName}/_apis/git/repositories/${repositoryId}/items?path=${encodeURIComponent(path)}&versionType=commit&version=${commitId}&includeContent=true&api-version=7.0`;
     
     console.log(`Fetching: ${apiUrl}`);
     
@@ -239,7 +241,7 @@ async function fetchPdfFile(baseUri: string, projectName: string, repositoryId: 
         headers: {
             'Accept': 'application/json'
         },
-        credentials: 'include'
+        credentials: 'same-origin'
     });
     
     console.log(`Response status: ${response.status}`);
