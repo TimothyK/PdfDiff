@@ -260,11 +260,15 @@ async function fetchPdfFile(baseUri: string, projectName: string, repositoryId: 
     
     console.log(`Fetching: ${apiUrl}`);
     
+    // Get access token from SDK
+    const accessToken = await SDK.getAccessToken();
+    console.log('Got access token:', accessToken ? 'Yes' : 'No');
+    
     const response = await fetch(apiUrl, {
         headers: {
-            'Accept': 'application/json'
-        },
-        credentials: 'same-origin'
+            'Accept': 'application/json',
+            'Authorization': `Bearer ${accessToken}`
+        }
     });
     
     console.log(`Response status: ${response.status}`);
