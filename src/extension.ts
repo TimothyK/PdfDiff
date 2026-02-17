@@ -62,9 +62,6 @@ async function initialize() {
 
             // Set up event listeners
             setupEventListeners();
-
-            // Render the initial view
-            await diffViewer.render('side-by-side');
             
             // Notify Azure DevOps that the extension has loaded successfully
             SDK.notifyLoadSucceeded();
@@ -263,6 +260,8 @@ async function loadPdfsFromContext(): Promise<void> {
                 const baseData = targetData || sourceData!;
                 const headData = sourceData || targetData!;
                 await diffViewer.loadPdfsFromData(baseData, headData);
+                console.log('PDFs loaded, now rendering side-by-side view...');
+                await diffViewer.render('side-by-side');
                 console.log('PDF diff rendered successfully');
             }
         } catch (apiError) {
