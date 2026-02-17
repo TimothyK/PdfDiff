@@ -20,12 +20,6 @@ module.exports = {
   output: {
     filename: 'extension.js',
     path: path.resolve(__dirname, 'dist'),
-    libraryTarget: 'umd',
-    globalObject: 'this',
-  },
-  externals: {
-    'azure-devops-extension-sdk': 'SDK',
-    'azure-devops-extension-api': 'API'
   },
   plugins: [
     new CopyWebpackPlugin({
