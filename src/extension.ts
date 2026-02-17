@@ -182,15 +182,18 @@ async function loadPdfsFromContext(): Promise<void> {
         
         console.log(`Loading PDF diff for PR ${pullRequestId} in repository ${repositoryId}`);
         console.log(`Project: ${project.name} (${project.id})`);
-        console.log('Pull request commits:', pullRequest.commits);
+        console.log('Pull request object:', JSON.stringify(pullRequest, null, 2));
 
-        // Get commit IDs from the pull request object
-        const baseCommitId = pullRequest.lastMergeSourceCommit?.commitId;
-        const headCommitId = pullRequest.lastMergeTargetCommit?.commitId;
+        // Get commit IDs - use sourceRefName tip (latest changes) vs targetRefName tip (merge destination)
+        // lastMergeSourceCommit is the source branch tip at last merge attempt
+        // lastMergeTargetCommit is the target branch tip at last merge attempt
+        const sourceCommitId = pullRequest.lastMergeSourceCommit?.commitId;
+        const targetCommitId = pullRequest.lastMergeTargetCommit?.commitId;
 
-        console.log(`Base commit: ${baseCommitId}, Head commit: ${headCommitId}`);
+        console.log(`Source commit (changes): ${sourceCommitId}`);
+        console.log(`Target commit (merge into): ${targetCommitId}`);
         
-        if (!baseCommitId || !headCommitId) {
+        if (!sourceCommitId || !targetCommitId) {
             throw new Error('Could not determine source and target commits for this Pull Request');
         }
 
@@ -231,16 +234,34 @@ async function loadPdfsFromContext(): Promise<void> {
         console.log('Fetching PDF files from commits...');
         try {
             // Fetch the PDF files using fetch directly
-            console.log('About to fetch base PDF...');
-            const baseData = await fetchPdfFile(baseUri, project.name, repositoryId, pdfPath, baseCommitId);
-            console.log('Base PDF fetched successfully');
+            // Try both commits - if one fails, the file might not exist in that commit
+            console.log('About to fetch target PDF (before changes)...');
+            let targetData: Uint8Array | null = null;
+            try {
+                targetData = await fetchPdfFile(baseUri, project.name, repositoryId, pdfPath, targetCommitId);
+                console.log('Target PDF fetched successfully');
+            } catch (err) {
+                console.log('Target PDF not found (file might be new in this PR):', err);
+            }
             
-            console.log('About to fetch head PDF...');
-            const headData = await fetchPdfFile(baseUri, project.name, repositoryId, pdfPath, headCommitId);
-            console.log('Head PDF fetched successfully');
+            console.log('About to fetch source PDF (with changes)...');
+            let sourceData: Uint8Array | null = null;
+            try {
+                sourceData = await fetchPdfFile(baseUri, project.name, repositoryId, pdfPath, sourceCommitId);
+                console.log('Source PDF fetched successfully');
+            } catch (err) {
+                console.log('Source PDF not found (file might be deleted in this PR):', err);
+            }
+
+            if (!targetData && !sourceData) {
+                throw new Error('PDF file not found in either commit');
+            }
 
             console.log('PDF files fetched, rendering diff...');
             if (diffViewer) {
+                // If only one file exists, show it (new file or deleted file case)
+                const baseData = targetData || sourceData!;
+                const headData = sourceData || targetData!;
                 await diffViewer.loadPdfsFromData(baseData, headData);
                 console.log('PDF diff rendered successfully');
             }
