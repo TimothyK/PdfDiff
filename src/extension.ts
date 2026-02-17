@@ -199,13 +199,13 @@ async function loadPdfsFromContext(): Promise<void> {
         console.log(`Testing with PDF path: ${pdfPath}`);
 
         // Get base URI for API calls
-        // Since webContext doesn't have host/org, get it from the current page URL
+        // Extension runs in an iframe, so use document.referrer to get the parent Azure DevOps URL
         // URL format: https://dev.azure.com/{organization}/{project}/_git/{repo}/pullrequest/{id}
-        const currentUrl = window.location.href;
-        console.log('Current URL:', currentUrl);
+        const parentUrl = document.referrer || window.location.href;
+        console.log('Parent URL:', parentUrl);
         
         // Extract organization from URL
-        const urlMatch = currentUrl.match(/https?:\/\/[^\/]+\/([^\/]+)\//);
+        const urlMatch = parentUrl.match(/https?:\/\/[^\/]+\/([^\/]+)\//);
         const organization = urlMatch ? urlMatch[1] : '';
         
         const baseUri = `https://dev.azure.com/${organization}`;
