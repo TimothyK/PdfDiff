@@ -1,6 +1,7 @@
 import * as SDK from "azure-devops-extension-sdk";
 import { CommonServiceIds, IProjectPageService } from "azure-devops-extension-api";
 import { PdfRenderer } from './pdf-renderer';
+import { PdfDiffViewer } from './pr-diff-viewer';
 
 async function fetchPdfFile(baseUri: string, repositoryId: string, path: string): Promise<ArrayBuffer> {
     const url = `${baseUri}/_apis/git/repositories/${repositoryId}/items?path=${encodeURIComponent(path)}&api-version=7.0&$format=octetStream`;
@@ -44,6 +45,9 @@ async function initialize() {
     
     // Test PDF.js import
     console.log('PdfRenderer class available:', typeof PdfRenderer === 'function');
+    // Test PdfDiffViewer import
+    console.log('PdfDiffViewer class available:', typeof PdfDiffViewer === 'function');
+    
     
     SDK.notifyLoadSucceeded();
 }
