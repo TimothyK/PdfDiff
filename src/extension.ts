@@ -1,7 +1,7 @@
 import * as SDK from "azure-devops-extension-sdk";
 import { PdfDiffViewer } from './pr-diff-viewer';
 import { CommonServiceIds, IProjectPageService } from "azure-devops-extension-api";
-import { GitApi } from './gitApi';
+import { fetchPdfFile } from './gitApi';
 
 let diffViewer: PdfDiffViewer | null = null;
 
@@ -199,21 +199,20 @@ async function loadPdfsFromContext(): Promise<void> {
         
         console.log(`Testing with PDF path: ${pdfPath}`);
 
-        // Create Git API client with base URI
+        // Get base URI for API calls
         const webContext = SDK.getWebContext() as any;
         const baseUri = webContext.host?.uri || `https://dev.azure.com/${webContext.organization?.name || ''}/`;
         console.log(`Base URI: ${baseUri}`);
-        const gitApi = new GitApi(baseUri);
         
         console.log('Fetching PDF files from commits...');
         try {
-            // Fetch the PDF files
+            // Fetch the PDF files using fetch directly
             console.log('About to fetch base PDF...');
-            const baseData = await gitApi.getItemContent(project.name, repositoryId, pdfPath, baseCommitId);
+            const baseData = await fetchPdfFile(baseUri, project.name, repositoryId, pdfPath, baseCommitId);
             console.log('Base PDF fetched successfully');
             
             console.log('About to fetch head PDF...');
-            const headData = await gitApi.getItemContent(project.name, repositoryId, pdfPath, headCommitId);
+            const headData = await fetchPdfFile(baseUri, project.name, repositoryId, pdfPath, headCommitId);
             console.log('Head PDF fetched successfully');
 
             console.log('PDF files fetched, rendering diff...');
