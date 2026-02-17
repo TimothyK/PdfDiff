@@ -199,27 +199,27 @@ async function loadPdfsFromContext(): Promise<void> {
         console.log(`Testing with PDF path: ${pdfPath}`);
 
         // Get base URI for API calls
-        const webContext = SDK.getWebContext() as any;
-        console.log('WebContext:', JSON.stringify({
-            host: webContext.host,
-            organization: webContext.organization,
-            project: webContext.project
-        }, null, 2));
+        // Since webContext doesn't have host/org, get it from the current page URL
+        // URL format: https://dev.azure.com/{organization}/{project}/_git/{repo}/pullrequest/{id}
+        const currentUrl = window.location.href;
+        console.log('Current URL:', currentUrl);
         
-        const baseUri = webContext.host?.uri || `https://dev.azure.com/${webContext.organization?.name || ''}`;
-        // Remove trailing slash if present
-        const cleanBaseUri = baseUri.replace(/\/$/, '');
-        console.log(`Base URI: ${cleanBaseUri}`);
+        // Extract organization from URL
+        const urlMatch = currentUrl.match(/https?:\/\/[^\/]+\/([^\/]+)\//);
+        const organization = urlMatch ? urlMatch[1] : '';
+        
+        const baseUri = `https://dev.azure.com/${organization}`;
+        console.log(`Base URI: ${baseUri}`);
         
         console.log('Fetching PDF files from commits...');
         try {
             // Fetch the PDF files using fetch directly
             console.log('About to fetch base PDF...');
-            const baseData = await fetchPdfFile(cleanBaseUri, project.name, repositoryId, pdfPath, baseCommitId);
+            const baseData = await fetchPdfFile(baseUri, project.name, repositoryId, pdfPath, baseCommitId);
             console.log('Base PDF fetched successfully');
             
             console.log('About to fetch head PDF...');
-            const headData = await fetchPdfFile(cleanBaseUri, project.name, repositoryId, pdfPath, headCommitId);
+            const headData = await fetchPdfFile(baseUri, project.name, repositoryId, pdfPath, headCommitId);
             console.log('Head PDF fetched successfully');
 
             console.log('PDF files fetched, rendering diff...');
