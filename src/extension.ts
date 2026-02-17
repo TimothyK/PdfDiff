@@ -256,7 +256,8 @@ async function loadPdfsFromContext(): Promise<void> {
 }
 
 async function fetchPdfFile(baseUri: string, projectName: string, repositoryId: string, path: string, commitId: string): Promise<Uint8Array> {
-    const apiUrl = `${baseUri}/${projectName}/_apis/git/repositories/${repositoryId}/items?path=${encodeURIComponent(path)}&versionType=commit&version=${commitId}&includeContent=true&api-version=7.0`;
+    // Use $format=octetStream to get binary data directly instead of base64 JSON
+    const apiUrl = `${baseUri}/${projectName}/_apis/git/repositories/${repositoryId}/items?path=${encodeURIComponent(path)}&versionType=commit&version=${commitId}&$format=octetStream&api-version=7.0`;
     
     console.log(`Fetching: ${apiUrl}`);
     
@@ -266,7 +267,7 @@ async function fetchPdfFile(baseUri: string, projectName: string, repositoryId: 
     
     const response = await fetch(apiUrl, {
         headers: {
-            'Accept': 'application/json',
+            'Accept': 'application/octet-stream',
             'Authorization': `Bearer ${accessToken}`
         }
     });
@@ -278,24 +279,11 @@ async function fetchPdfFile(baseUri: string, projectName: string, repositoryId: 
         throw new Error(`HTTP ${response.status}: ${errorText}`);
     }
     
-    const data = await response.json();
+    // Get binary data directly
+    const arrayBuffer = await response.arrayBuffer();
+    console.log(`Got binary data, ${arrayBuffer.byteLength} bytes`);
     
-    if (!data.content) {
-        throw new Error(`No content in response for ${path}`);
-    }
-    
-    console.log(`Got content, length: ${data.content.length} chars`);
-    
-    // Convert base64 content to Uint8Array
-    const base64Content = data.content;
-    const binaryString = atob(base64Content);
-    const bytes = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-    }
-    
-    console.log(`Converted to Uint8Array, ${bytes.length} bytes`);
-    return bytes;
+    return new Uint8Array(arrayBuffer);
 }
 
 function setActiveButton(activeId: string) {
