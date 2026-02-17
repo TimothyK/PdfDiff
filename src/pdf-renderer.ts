@@ -43,7 +43,10 @@ export class PdfRenderer {
     async loadPdfFromData(data: Uint8Array): Promise<void> {
         initializeWorker();
         try {
-            this.pdfDocument = await pdfjsLib.getDocument({ data }).promise;
+            // Clone the data to prevent ArrayBuffer detachment issues
+            // PDF.js transfers the ArrayBuffer to the worker, so make a copy
+            const clonedData = new Uint8Array(data);
+            this.pdfDocument = await pdfjsLib.getDocument({ data: clonedData }).promise;
         } catch (error) {
             console.error('Error loading PDF from data:', error);
             throw new Error(`Failed to load PDF from data: ${error}`);
