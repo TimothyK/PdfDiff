@@ -200,6 +200,12 @@ async function loadPdfsFromContext(): Promise<void> {
 
         // Get base URI for API calls
         const webContext = SDK.getWebContext() as any;
+        console.log('WebContext:', JSON.stringify({
+            host: webContext.host,
+            organization: webContext.organization,
+            project: webContext.project
+        }, null, 2));
+        
         const baseUri = webContext.host?.uri || `https://dev.azure.com/${webContext.organization?.name || ''}`;
         // Remove trailing slash if present
         const cleanBaseUri = baseUri.replace(/\/$/, '');
