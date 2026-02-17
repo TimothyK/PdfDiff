@@ -228,12 +228,23 @@ export class PdfDiffViewer {
             throw new Error('View containers not found');
         }
 
+        console.log('Before removing active classes:');
+        console.log('  side-by-side-view has active:', sideBySideView.classList.contains('active'));
+        console.log('  inline-view has active:', inlineView.classList.contains('active'));
+        console.log('  pixel-diff-view has active:', pixelDiffView.classList.contains('active'));
+
         // Hide all views
         sideBySideView.classList.remove('active');
         inlineView.classList.remove('active');
         pixelDiffView.classList.remove('active');
 
+        console.log('After removing active classes:');
+        console.log('  side-by-side-view has active:', sideBySideView.classList.contains('active'));
+        console.log('  inline-view has active:', inlineView.classList.contains('active'));
+        console.log('  pixel-diff-view has active:', pixelDiffView.classList.contains('active'));
+
         // Show and render the selected view
+        console.log('Rendering mode:', mode);
         switch (mode) {
             case 'side-by-side':
                 sideBySideView.classList.add('active');
