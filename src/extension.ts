@@ -261,6 +261,14 @@ async function loadPdfsFromContext(): Promise<void> {
                 const headData = sourceData || targetData!;
                 await diffViewer.loadPdfsFromData(baseData, headData);
                 console.log('PDFs loaded, now rendering side-by-side view...');
+                
+                // Debug: Check if containers exist
+                const baseContainer = document.getElementById('base-container');
+                const headContainer = document.getElementById('head-container');
+                console.log('Base container exists:', !!baseContainer);
+                console.log('Head container exists:', !!headContainer);
+                console.log('Document body innerHTML length:', document.body?.innerHTML?.length || 0);
+                
                 await diffViewer.render('side-by-side');
                 console.log('PDF diff rendered successfully');
             }
