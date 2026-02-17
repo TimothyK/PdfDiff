@@ -37,9 +37,8 @@ export class PdfDiffViewer {
         this.maxPages = Math.max(basePages, headPages);
     }
 
-    async renderSideBySide(container: HTMLElement): Promise<void> {
-        container.innerHTML = '';
-
+    async renderSideBySide(): Promise<void> {
+        // Get the containers directly - they're in the HTML already
         const baseContainer = document.getElementById('base-container');
         const headContainer = document.getElementById('head-container');
 
@@ -238,7 +237,7 @@ export class PdfDiffViewer {
         switch (mode) {
             case 'side-by-side':
                 sideBySideView.classList.add('active');
-                await this.renderSideBySide(sideBySideView);
+                await this.renderSideBySide();
                 break;
             case 'inline':
                 inlineView.classList.add('active');
