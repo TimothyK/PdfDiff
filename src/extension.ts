@@ -4,8 +4,11 @@ import { CommonServiceIds, IProjectPageService, IHostNavigationService } from "a
 
 declare const EXTENSION_VERSION: string;
 
-// Log version immediately on script load, before any SDK calls
-console.log(`PDF Diff Viewer version: ${EXTENSION_VERSION}`);
+// Capture version safely — DefinePlugin substitutes this at build time
+const _EXT_VERSION: string = (typeof EXTENSION_VERSION !== 'undefined') ? EXTENSION_VERSION : 'UNKNOWN';
+
+// Use console.warn so it appears in yellow and is impossible to miss in DevTools
+console.warn(`>>> PDF Diff Viewer version: ${_EXT_VERSION} <<<`);
 
 let diffViewer: PdfDiffViewer | null = null;
 
@@ -18,19 +21,26 @@ function showDebug(lines: string[]): void {
     lines.forEach(l => console.log('[PDF-DIFF DEBUG]', l));
 }
 
-function setVersionDisplay(): void {
+function trySetVersionDisplay(): void {
     const versionEl = document.getElementById('ext-version');
     if (versionEl) {
-        versionEl.textContent = `v${EXTENSION_VERSION}`;
-    } else {
-        // Element not ready yet — retry once the DOM is fully parsed
-        document.addEventListener('DOMContentLoaded', () => {
-            const el = document.getElementById('ext-version');
-            if (el) el.textContent = `v${EXTENSION_VERSION}`;
-        });
+        versionEl.textContent = `v${_EXT_VERSION}`;
+        versionEl.title = `PDF Diff Viewer v${_EXT_VERSION}`;
+    }
+    const loadingEl = document.getElementById('loading');
+    if (loadingEl) {
+        loadingEl.textContent = `Loading PDF files... (v${_EXT_VERSION})`;
     }
 }
-setVersionDisplay();
+
+// Try immediately, then again after DOMContentLoaded, then at 500ms intervals until it sticks
+trySetVersionDisplay();
+document.addEventListener('DOMContentLoaded', trySetVersionDisplay);
+const _versionInterval = setInterval(() => {
+    trySetVersionDisplay();
+    const el = document.getElementById('ext-version');
+    if (el && el.textContent) clearInterval(_versionInterval);
+}, 500);
 
 async function initialize() {
     console.log('Initialize function called');
@@ -97,7 +107,7 @@ async function initialize() {
         } catch (error) {
             console.error('Error loading PDFs:', error);
             if (errorDiv) {
-                errorDiv.textContent = `Error loading PDF files: ${error}`;
+                errorDiv.textContent = `[v${_EXT_VERSION}] Error loading PDF files: ${error}`;
                 errorDiv.style.display = 'block';
             }
             if (loading) {
