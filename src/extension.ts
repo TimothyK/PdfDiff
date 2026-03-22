@@ -206,17 +206,7 @@ async function loadPdfsFromContext(): Promise<void> {
 
         console.log(`Loading PDF diff for PR ${pullRequestId} in repository ${repositoryId}`);
 
-        const sourceCommitId = pullRequest.lastMergeSourceCommit?.commitId;
-        const targetCommitId = pullRequest.lastMergeTargetCommit?.commitId;
-
-        console.log(`Source commit (head): ${sourceCommitId}`);
-        console.log(`Target commit (base): ${targetCommitId}`);
-
-        if (!sourceCommitId || !targetCommitId) {
-            throw new Error('Could not determine source and target commits for this Pull Request');
-        }
-
-        // Compute base URI early — needed for both the file picker and PDF loading
+        // Compute base URI — needed for all API calls
         const repoUrl = pullRequest?.repository?.url || pullRequest?.repository?.remoteUrl || '';
         let baseUri = 'https://dev.azure.com';
         if (repoUrl) {
@@ -230,45 +220,91 @@ async function loadPdfsFromContext(): Promise<void> {
         }
         console.log(`Base URI: ${baseUri}`);
 
-        // Resolve the selected path: overridePath (file picker click) > nav service > referrer > iframe params
-        let selectedPath: string | null = overridePath;
-        if (!selectedPath) {
-            const iframeParams = new URLSearchParams(window.location.search);
-            let referrerPath: string | null = null;
-            try {
-                if (document.referrer) {
-                    referrerPath = new URLSearchParams(new URL(document.referrer).search).get('path');
-                }
-            } catch (_) { /* ignore */ }
+        // Read all URL query params from the host page in one call
+        let navParams: { [key: string]: string } = {};
+        let referrerParams: { [key: string]: string } = {};
+        try {
+            if (document.referrer) {
+                new URLSearchParams(new URL(document.referrer).search)
+                    .forEach((v, k) => referrerParams[k] = v);
+            }
+        } catch (_) { /* ignore */ }
+        try {
+            type NavResult = { ok: true; params: { [key: string]: string } } | { ok: false };
+            const navResult = await Promise.race<NavResult>([
+                (async (): Promise<NavResult> => {
+                    const nav = await SDK.getService<IHostNavigationService>(CommonServiceIds.HostNavigationService);
+                    return { ok: true, params: await nav.getQueryParams() };
+                })(),
+                new Promise<NavResult>(resolve => setTimeout(() => resolve({ ok: false }), 5000)),
+            ]);
+            if (navResult.ok) navParams = navResult.params;
+        } catch (_) { /* ignore */ }
 
-            let navPath: string | null = null;
-            try {
-                type NavResult = { ok: true; params: { [key: string]: string } } | { ok: false; error: string };
-                const navResult = await Promise.race<NavResult>([
-                    (async (): Promise<NavResult> => {
-                        const nav = await SDK.getService<IHostNavigationService>(CommonServiceIds.HostNavigationService);
-                        const p = await nav.getQueryParams();
-                        return { ok: true, params: p };
-                    })(),
-                    new Promise<NavResult>(resolve => setTimeout(() => resolve({ ok: false, error: 'timed out' }), 5000)),
-                ]);
-                if (navResult.ok) navPath = navResult.params['path'] || null;
-            } catch (_) { /* ignore */ }
+        const iframeParams = new URLSearchParams(window.location.search);
+        const getParam = (key: string): string | null =>
+            navParams[key] || referrerParams[key] || iframeParams.get(key) || null;
 
-            selectedPath = navPath || referrerPath || iframeParams.get('path');
-        }
-
+        // Resolve selected path
+        const selectedPath = overridePath || getParam('path');
         console.log(`Selected path: ${selectedPath}`);
         updatePathDisplay(selectedPath);
 
-        // If no path or the path is not a PDF, show the file picker
+        // Determine commit IDs — start with PR's lastMerge commits as fallback
+        let headCommitId: string = pullRequest.lastMergeSourceCommit?.commitId;
+        let baseCommitId: string = pullRequest.lastMergeTargetCommit?.commitId;
+
+        if (!headCommitId || !baseCommitId) {
+            throw new Error('Could not determine source and target commits for this Pull Request');
+        }
+
+        // Override with iteration-specific commits when iteration params are present in the URL
+        const iterationParam = getParam('iteration');
+        const baseIterParam = getParam('base');
+
+        if (iterationParam) {
+            const iterNum = parseInt(iterationParam, 10);
+            if (!isNaN(iterNum) && iterNum > 0) {
+                try {
+                    const iter = await fetchPrIteration(baseUri, project.name, repositoryId, pullRequestId, iterNum);
+                    if (iter.sourceCommitId) {
+                        headCommitId = iter.sourceCommitId;
+                        console.log(`Using iteration ${iterNum} source commit as head: ${headCommitId}`);
+                    }
+                } catch (err) {
+                    console.warn(`Failed to fetch iteration ${iterNum}, falling back to lastMergeSourceCommit:`, err);
+                }
+            }
+        }
+
+        if (baseIterParam) {
+            const baseNum = parseInt(baseIterParam, 10);
+            if (!isNaN(baseNum) && baseNum > 0) {
+                // base=N (N>0): compare against the state at that PR iteration
+                try {
+                    const iter = await fetchPrIteration(baseUri, project.name, repositoryId, pullRequestId, baseNum);
+                    if (iter.sourceCommitId) {
+                        baseCommitId = iter.sourceCommitId;
+                        console.log(`Using iteration ${baseNum} source commit as base: ${baseCommitId}`);
+                    }
+                } catch (err) {
+                    console.warn(`Failed to fetch base iteration ${baseNum}, falling back to lastMergeTargetCommit:`, err);
+                }
+            }
+            // base=0 means compare against the original target branch — keep lastMergeTargetCommit
+        }
+
+        console.log(`Head commit: ${headCommitId}`);
+        console.log(`Base commit: ${baseCommitId}`);
+
+        // If no path or not a PDF, show the file picker
         if (!selectedPath || !selectedPath.toLowerCase().endsWith('.pdf')) {
             const loading = document.getElementById('loading');
             if (loading) loading.style.display = 'none';
 
             let changedPdfs: string[] = [];
             try {
-                changedPdfs = await fetchChangedPdfFiles(baseUri, project.name, repositoryId, sourceCommitId, targetCommitId);
+                changedPdfs = await fetchChangedPdfFiles(baseUri, project.name, repositoryId, headCommitId, baseCommitId);
             } catch (err) {
                 console.error('Failed to fetch changed PDF files:', err);
             }
@@ -279,30 +315,28 @@ async function loadPdfsFromContext(): Promise<void> {
 
         // Load and render the diff for the selected PDF
         console.log(`Loading PDF diff for: ${selectedPath}`);
-        let targetData: Uint8Array | null = null;
+        let baseData: Uint8Array | null = null;
         try {
-            targetData = await fetchPdfFile(baseUri, project.name, repositoryId, selectedPath, targetCommitId);
+            baseData = await fetchPdfFile(baseUri, project.name, repositoryId, selectedPath, baseCommitId);
             console.log('Base PDF fetched successfully');
         } catch (err) {
             console.log('Base PDF not found (file might be new in this PR):', err);
         }
 
-        let sourceData: Uint8Array | null = null;
+        let headData: Uint8Array | null = null;
         try {
-            sourceData = await fetchPdfFile(baseUri, project.name, repositoryId, selectedPath, sourceCommitId);
+            headData = await fetchPdfFile(baseUri, project.name, repositoryId, selectedPath, headCommitId);
             console.log('Head PDF fetched successfully');
         } catch (err) {
             console.log('Head PDF not found (file might be deleted in this PR):', err);
         }
 
-        if (!targetData && !sourceData) {
+        if (!baseData && !headData) {
             throw new Error(`PDF file not found in either commit: ${selectedPath}`);
         }
 
         if (diffViewer) {
-            const baseData = targetData || sourceData!;
-            const headData = sourceData || targetData!;
-            await diffViewer.loadPdfsFromData(baseData, headData);
+            await diffViewer.loadPdfsFromData(baseData || headData!, headData || baseData!);
             await diffViewer.render('side-by-side');
             console.log('PDF diff rendered successfully');
         }
@@ -311,6 +345,31 @@ async function loadPdfsFromContext(): Promise<void> {
         console.error('Error loading PDFs from context:', error);
         throw error;
     }
+}
+
+async function fetchPrIteration(
+    baseUri: string, projectName: string, repositoryId: string,
+    pullRequestId: number, iterationId: number
+): Promise<{ sourceCommitId: string; targetCommitId: string }> {
+    const apiUrl = `${baseUri}/${projectName}/_apis/git/repositories/${repositoryId}/pullRequests/${pullRequestId}/iterations/${iterationId}?api-version=7.0`;
+    console.log(`Fetching PR iteration ${iterationId}: ${apiUrl}`);
+
+    const accessToken = await SDK.getAccessToken();
+    const response = await fetch(apiUrl, {
+        headers: { 'Authorization': `Bearer ${accessToken}` }
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+    }
+
+    const data = await response.json();
+    console.log(`Iteration ${iterationId} data:`, JSON.stringify(data));
+    return {
+        sourceCommitId: data.sourceRefCommit?.commitId,
+        targetCommitId: data.targetRefCommit?.commitId,
+    };
 }
 
 function updatePathDisplay(path: string | null): void {
