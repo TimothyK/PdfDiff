@@ -336,6 +336,11 @@ async function loadPdfsFromContext(): Promise<void> {
         }
 
         if (diffViewer) {
+            const baseLabel = baseIterParam && parseInt(baseIterParam, 10) > 0
+                ? `Iteration ${baseIterParam}`
+                : 'Base';
+            const headLabel = iterationParam ? `Iteration ${iterationParam}` : 'Head';
+            diffViewer.setLabels(baseLabel, headLabel);
             await diffViewer.loadPdfsFromData(baseData || headData!, headData || baseData!);
             await diffViewer.render('side-by-side');
             console.log('PDF diff rendered successfully');

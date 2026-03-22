@@ -9,10 +9,21 @@ export class PdfDiffViewer {
     private currentPage: number = 1;
     private viewMode: ViewMode = 'side-by-side';
     private maxPages: number = 0;
+    private baseLabel: string = 'Base';
+    private headLabel: string = 'Head';
 
     constructor() {
         this.baseRenderer = new PdfRenderer();
         this.headRenderer = new PdfRenderer();
+    }
+
+    setLabels(baseLabel: string, headLabel: string): void {
+        this.baseLabel = baseLabel;
+        this.headLabel = headLabel;
+        const baseEl = document.getElementById('base-label');
+        const headEl = document.getElementById('head-label');
+        if (baseEl) baseEl.textContent = baseLabel;
+        if (headEl) headEl.textContent = headLabel;
     }
 
     async loadPdfs(baseUrl: string, headUrl: string): Promise<void> {
@@ -79,7 +90,7 @@ export class PdfDiffViewer {
             
             const label = document.createElement('div');
             label.className = 'page-label';
-            label.textContent = `− Page ${this.currentPage} (Original)`;
+            label.textContent = `− Page ${this.currentPage} (${this.baseLabel})`;
             pageDiv.appendChild(label);
 
             const basePage = await this.baseRenderer.renderPage(this.currentPage);
@@ -93,7 +104,7 @@ export class PdfDiffViewer {
             
             const label = document.createElement('div');
             label.className = 'page-label';
-            label.textContent = `+ Page ${this.currentPage} (Modified)`;
+            label.textContent = `+ Page ${this.currentPage} (${this.headLabel})`;
             pageDiv.appendChild(label);
 
             const headPage = await this.headRenderer.renderPage(this.currentPage);
@@ -168,7 +179,7 @@ export class PdfDiffViewer {
         // Add canvases to container
         const baseWrapper = document.createElement('div');
         const baseTitle = document.createElement('div');
-        baseTitle.textContent = 'Original';
+        baseTitle.textContent = this.baseLabel;
         baseTitle.style.fontWeight = 'bold';
         baseTitle.style.marginBottom = '5px';
         baseWrapper.appendChild(baseTitle);
@@ -176,7 +187,7 @@ export class PdfDiffViewer {
 
         const headWrapper = document.createElement('div');
         const headTitle = document.createElement('div');
-        headTitle.textContent = 'Modified';
+        headTitle.textContent = this.headLabel;
         headTitle.style.fontWeight = 'bold';
         headTitle.style.marginBottom = '5px';
         headWrapper.appendChild(headTitle);
