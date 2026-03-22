@@ -90,7 +90,7 @@ export class PdfDiffViewer {
             
             const label = document.createElement('div');
             label.className = 'page-label';
-            label.textContent = `− ${this.baseLabel}`;
+            label.textContent = this.baseLabel;
             pageDiv.appendChild(label);
 
             const basePage = await this.baseRenderer.renderPage(this.currentPage);
@@ -104,7 +104,7 @@ export class PdfDiffViewer {
             
             const label = document.createElement('div');
             label.className = 'page-label';
-            label.textContent = `+ ${this.headLabel}`;
+            label.textContent = this.headLabel;
             pageDiv.appendChild(label);
 
             const headPage = await this.headRenderer.renderPage(this.currentPage);
@@ -130,11 +130,6 @@ export class PdfDiffViewer {
         // Create comparison container
         const comparisonDiv = document.createElement('div');
         comparisonDiv.className = 'page-comparison';
-
-        const label = document.createElement('div');
-        label.className = 'page-label';
-        label.textContent = `Page ${this.currentPage}`;
-        comparisonDiv.appendChild(label);
 
         const diffContainer = document.createElement('div');
         diffContainer.className = 'diff-canvas-container';
