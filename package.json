@@ -1,0 +1,36 @@
+{
+  "name": "pdf-diff-viewer",
+  "version": "1.0.0",
+  "description": "Azure DevOps extension for viewing PDF diffs in pull requests",
+  "main": "dist/extension.js",
+  "scripts": {
+    "build": "webpack --mode production",
+    "dev": "webpack --mode development --watch",
+    "package": "tfx extension create --manifest-globs vss-extension.json"
+  },
+  "keywords": [
+    "azure-devops",
+    "extension",
+    "pdf",
+    "diff",
+    "pull-request"
+  ],
+  "author": "Timothy K",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/pixelmatch": "^5.2.6",
+    "copy-webpack-plugin": "^11.0.0",
+    "tfx-cli": "^0.16.0",
+    "ts-loader": "^9.4.0",
+    "typescript": "^5.0.0",
+    "webpack": "^5.88.0",
+    "webpack-cli": "^5.1.0"
+  },
+  "dependencies": {
+    "azure-devops-extension-api": "^4.0.0",
+    "azure-devops-extension-sdk": "^4.0.0",
+    "pdfjs-dist": "^4.2.67",
+    "pixelmatch": "^5.3.0"
+  }
+}

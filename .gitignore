@@ -301,6 +301,10 @@ FakesAssemblies/
 .ntvs_analysis.dat
 node_modules/
 
+# Extension build output
+dist/
+*.vsix
+
 # Visual Studio 6 build log
 *.plg
 
@@ -416,3 +420,5 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+.notes/
