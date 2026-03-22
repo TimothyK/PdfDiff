@@ -153,6 +153,19 @@
             display: none;
         }
 
+        #debug-info {
+            padding: 12px 20px;
+            font-family: monospace;
+            font-size: 12px;
+            background-color: #fffbe6;
+            border: 1px solid #f0c040;
+            border-radius: 4px;
+            margin: 20px;
+            white-space: pre-wrap;
+            word-break: break-all;
+            display: none;
+        }
+
         .page-controls {
             margin-bottom: 10px;
             display: flex;
@@ -188,6 +201,7 @@
     <div id="viewer-container">
         <div id="loading">Loading PDF files...</div>
         <div id="error"></div>
+        <div id="debug-info"></div>
         
         <div id="side-by-side-view" class="diff-view active">
             <div class="pdf-column">

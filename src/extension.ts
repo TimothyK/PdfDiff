@@ -4,6 +4,15 @@ import { CommonServiceIds, IProjectPageService, IHostNavigationService } from "a
 
 let diffViewer: PdfDiffViewer | null = null;
 
+function showDebug(lines: string[]): void {
+    const debugDiv = document.getElementById('debug-info');
+    if (debugDiv) {
+        debugDiv.style.display = 'block';
+        debugDiv.textContent = lines.join('\n');
+    }
+    lines.forEach(l => console.log('[PDF-DIFF DEBUG]', l));
+}
+
 async function initialize() {
     console.log('Initialize function called');
     try {
@@ -195,15 +204,51 @@ async function loadPdfsFromContext(): Promise<void> {
         }
 
         // Extract the PDF path from the host page URL query parameters.
-        // Azure DevOps is a SPA so document.referrer is stale; use the navigation
-        // service which communicates via postMessage to get the live query params.
-        const navigationService = await SDK.getService<IHostNavigationService>(CommonServiceIds.HostNavigationService);
-        const queryParams = await navigationService.getQueryParams();
-        const pdfPath = queryParams['path'] || null;
-        console.log('Query params from host page:', queryParams);
+        // Collect diagnostics from every available source so we can surface them in the UI.
+        const debugLines: string[] = [];
+        debugLines.push('=== URL Diagnostics ===');
+        debugLines.push(`window.location.href: ${window.location.href}`);
+        debugLines.push(`window.location.search: ${window.location.search}`);
+        debugLines.push(`document.referrer: ${document.referrer}`);
+
+        // Try parsing path from window.location (iframe URL)
+        const iframeParams = new URLSearchParams(window.location.search);
+        debugLines.push(`iframe path param: ${iframeParams.get('path') ?? '(not found)'}`);
+
+        // Try parsing path from document.referrer
+        let referrerPath: string | null = null;
+        try {
+            const referrerParams = new URLSearchParams(new URL(document.referrer).search);
+            referrerPath = referrerParams.get('path');
+            debugLines.push(`referrer path param: ${referrerPath ?? '(not found)'}`);
+        } catch (e) {
+            debugLines.push(`referrer parse error: ${e}`);
+        }
+
+        // Try IHostNavigationService.getQueryParams()
+        let navPath: string | null = null;
+        let queryParams: { [key: string]: string } = {};
+        try {
+            const navigationService = await SDK.getService<IHostNavigationService>(CommonServiceIds.HostNavigationService);
+            queryParams = await navigationService.getQueryParams();
+            navPath = queryParams['path'] || null;
+            debugLines.push(`getQueryParams() result: ${JSON.stringify(queryParams)}`);
+            debugLines.push(`getQueryParams() path: ${navPath ?? '(not found)'}`);
+        } catch (navError) {
+            debugLines.push(`getQueryParams() error: ${navError}`);
+        }
+
+        // Show all diagnostics in the UI
+        showDebug(debugLines);
+
+        // Pick best available path value
+        const pdfPath = navPath || referrerPath || iframeParams.get('path');
 
         if (!pdfPath) {
-            throw new Error('No PDF file selected. Please select a PDF file from the Files tab.');
+            throw new Error(
+                'No PDF file selected. Please select a PDF file from the Files tab.\n' +
+                'Debug info shown below.'
+            );
         }
 
         console.log(`PDF path from URL: ${pdfPath}`);
