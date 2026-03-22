@@ -1,6 +1,6 @@
 import * as SDK from "azure-devops-extension-sdk";
 import { PdfDiffViewer } from './pr-diff-viewer';
-import { CommonServiceIds, IProjectPageService } from "azure-devops-extension-api";
+import { CommonServiceIds, IProjectPageService, IHostNavigationService } from "azure-devops-extension-api";
 
 let diffViewer: PdfDiffViewer | null = null;
 
@@ -194,10 +194,13 @@ async function loadPdfsFromContext(): Promise<void> {
             throw new Error('Could not determine source and target commits for this Pull Request');
         }
 
-        // Extract the PDF path from the URL query parameters (set when selecting a file from the Files tab)
-        const pageUrl = document.referrer || window.location.href;
-        const pageUrlParams = new URLSearchParams(new URL(pageUrl).search);
-        const pdfPath = pageUrlParams.get('path');
+        // Extract the PDF path from the host page URL query parameters.
+        // Azure DevOps is a SPA so document.referrer is stale; use the navigation
+        // service which communicates via postMessage to get the live query params.
+        const navigationService = await SDK.getService<IHostNavigationService>(CommonServiceIds.HostNavigationService);
+        const queryParams = await navigationService.getQueryParams();
+        const pdfPath = queryParams['path'] || null;
+        console.log('Query params from host page:', queryParams);
 
         if (!pdfPath) {
             throw new Error('No PDF file selected. Please select a PDF file from the Files tab.');
