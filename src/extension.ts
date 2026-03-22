@@ -194,11 +194,16 @@ async function loadPdfsFromContext(): Promise<void> {
             throw new Error('Could not determine source and target commits for this Pull Request');
         }
 
-        // For now, let's hardcode a PDF path to test if fetching works
-        // TODO: Need to find a way to get the list of changed files without hanging API calls
-        const pdfPath = '/116U005299-03-BOL.pdf'; // Replace with actual path from your PR
-        
-        console.log(`Testing with PDF path: ${pdfPath}`);
+        // Extract the PDF path from the URL query parameters (set when selecting a file from the Files tab)
+        const pageUrl = document.referrer || window.location.href;
+        const pageUrlParams = new URLSearchParams(new URL(pageUrl).search);
+        const pdfPath = pageUrlParams.get('path');
+
+        if (!pdfPath) {
+            throw new Error('No PDF file selected. Please select a PDF file from the Files tab.');
+        }
+
+        console.log(`PDF path from URL: ${pdfPath}`);
 
         // Get base URI for API calls
         // Try to extract from pullRequest object which might have repository URL
