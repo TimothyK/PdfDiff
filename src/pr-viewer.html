@@ -9,7 +9,6 @@
             margin: 0;
             padding: 0;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            overflow: hidden;
         }
 
         #toolbar {
@@ -50,7 +49,6 @@
         #viewer-container {
             height: calc(100vh - 60px);
             overflow: auto;
-            position: relative;
         }
 
         .diff-view {
@@ -128,12 +126,16 @@
             border-radius: 4px;
             padding: 10px;
             background-color: white;
+            display: inline-block;
+            min-width: max-content;
         }
 
         .diff-canvas-container {
             display: flex;
             gap: 10px;
             align-items: flex-start;
+            flex-wrap: nowrap;
+            min-width: max-content;
         }
 
         .diff-highlight {
