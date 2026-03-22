@@ -4,6 +4,9 @@ import { CommonServiceIds, IProjectPageService, IHostNavigationService } from "a
 
 declare const EXTENSION_VERSION: string;
 
+// Log version immediately on script load, before any SDK calls
+console.log(`PDF Diff Viewer version: ${EXTENSION_VERSION}`);
+
 let diffViewer: PdfDiffViewer | null = null;
 
 function showDebug(lines: string[]): void {
@@ -14,6 +17,20 @@ function showDebug(lines: string[]): void {
     }
     lines.forEach(l => console.log('[PDF-DIFF DEBUG]', l));
 }
+
+function setVersionDisplay(): void {
+    const versionEl = document.getElementById('ext-version');
+    if (versionEl) {
+        versionEl.textContent = `v${EXTENSION_VERSION}`;
+    } else {
+        // Element not ready yet — retry once the DOM is fully parsed
+        document.addEventListener('DOMContentLoaded', () => {
+            const el = document.getElementById('ext-version');
+            if (el) el.textContent = `v${EXTENSION_VERSION}`;
+        });
+    }
+}
+setVersionDisplay();
 
 async function initialize() {
     console.log('Initialize function called');
@@ -32,10 +49,6 @@ async function initialize() {
         
         console.log('SDK.ready() completed');
         console.log('PDF Diff Viewer extension loaded');
-        console.log(`Extension version: ${EXTENSION_VERSION}`);
-
-        const versionEl = document.getElementById('ext-version');
-        if (versionEl) versionEl.textContent = `v${EXTENSION_VERSION}`;
 
         const loading = document.getElementById('loading');
         const errorDiv = document.getElementById('error');
