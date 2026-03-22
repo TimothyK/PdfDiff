@@ -204,51 +204,66 @@ async function loadPdfsFromContext(): Promise<void> {
         }
 
         // Extract the PDF path from the host page URL query parameters.
-        // Collect diagnostics from every available source so we can surface them in the UI.
-        const debugLines: string[] = [];
-        debugLines.push('=== URL Diagnostics ===');
-        debugLines.push(`window.location.href: ${window.location.href}`);
-        debugLines.push(`window.location.search: ${window.location.search}`);
-        debugLines.push(`document.referrer: ${document.referrer}`);
-
-        // Try parsing path from window.location (iframe URL)
+        // Log synchronous info immediately so it always appears even if async calls hang.
         const iframeParams = new URLSearchParams(window.location.search);
-        debugLines.push(`iframe path param: ${iframeParams.get('path') ?? '(not found)'}`);
-
-        // Try parsing path from document.referrer
         let referrerPath: string | null = null;
+        let referrerParseError = '';
         try {
-            const referrerParams = new URLSearchParams(new URL(document.referrer).search);
-            referrerPath = referrerParams.get('path');
-            debugLines.push(`referrer path param: ${referrerPath ?? '(not found)'}`);
+            if (document.referrer) {
+                const referrerParams = new URLSearchParams(new URL(document.referrer).search);
+                referrerPath = referrerParams.get('path');
+            }
         } catch (e) {
-            debugLines.push(`referrer parse error: ${e}`);
+            referrerParseError = String(e);
         }
 
-        // Try IHostNavigationService.getQueryParams()
+        const syncDebug = [
+            '=== URL Diagnostics (sync) ===',
+            `window.location.href: ${window.location.href}`,
+            `window.location.search: ${window.location.search}`,
+            `document.referrer: ${document.referrer}`,
+            `iframe path param: ${iframeParams.get('path') ?? '(not found)'}`,
+            `referrer path param: ${referrerPath ?? '(not found)'}`,
+            referrerParseError ? `referrer parse error: ${referrerParseError}` : '',
+            'Calling getQueryParams()...',
+        ].filter(Boolean);
+        showDebug(syncDebug);
+
+        // Try IHostNavigationService.getQueryParams() with a 5-second timeout
         let navPath: string | null = null;
         let queryParams: { [key: string]: string } = {};
         try {
-            const navigationService = await SDK.getService<IHostNavigationService>(CommonServiceIds.HostNavigationService);
-            queryParams = await navigationService.getQueryParams();
-            navPath = queryParams['path'] || null;
-            debugLines.push(`getQueryParams() result: ${JSON.stringify(queryParams)}`);
-            debugLines.push(`getQueryParams() path: ${navPath ?? '(not found)'}`);
+            type NavResult = { ok: true; params: { [key: string]: string } } | { ok: false; error: string };
+            const navResult = await Promise.race<NavResult>([
+                (async (): Promise<NavResult> => {
+                    const navigationService = await SDK.getService<IHostNavigationService>(CommonServiceIds.HostNavigationService);
+                    const params = await navigationService.getQueryParams();
+                    return { ok: true, params };
+                })(),
+                new Promise<NavResult>(resolve =>
+                    setTimeout(() => resolve({ ok: false, error: 'timed out after 5s' }), 5000)
+                ),
+            ]);
+            if (navResult.ok) {
+                queryParams = navResult.params;
+                navPath = queryParams['path'] || null;
+            }
+            showDebug([
+                ...syncDebug,
+                navResult.ok
+                    ? `getQueryParams() result: ${JSON.stringify(queryParams)}`
+                    : `getQueryParams() ${navResult.error}`,
+                `getQueryParams() path: ${navPath ?? '(not found)'}`,
+            ]);
         } catch (navError) {
-            debugLines.push(`getQueryParams() error: ${navError}`);
+            showDebug([...syncDebug, `getQueryParams() error: ${navError}`]);
         }
-
-        // Show all diagnostics in the UI
-        showDebug(debugLines);
 
         // Pick best available path value
         const pdfPath = navPath || referrerPath || iframeParams.get('path');
 
         if (!pdfPath) {
-            throw new Error(
-                'No PDF file selected. Please select a PDF file from the Files tab.\n' +
-                'Debug info shown below.'
-            );
+            throw new Error('No PDF file selected. Please select a PDF file from the Files tab. (See debug panel)');
         }
 
         console.log(`PDF path from URL: ${pdfPath}`);
