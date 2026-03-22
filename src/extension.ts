@@ -2,6 +2,8 @@ import * as SDK from "azure-devops-extension-sdk";
 import { PdfDiffViewer } from './pr-diff-viewer';
 import { CommonServiceIds, IProjectPageService, IHostNavigationService } from "azure-devops-extension-api";
 
+declare const EXTENSION_VERSION: string;
+
 let diffViewer: PdfDiffViewer | null = null;
 
 function showDebug(lines: string[]): void {
@@ -30,6 +32,10 @@ async function initialize() {
         
         console.log('SDK.ready() completed');
         console.log('PDF Diff Viewer extension loaded');
+        console.log(`Extension version: ${EXTENSION_VERSION}`);
+
+        const versionEl = document.getElementById('ext-version');
+        if (versionEl) versionEl.textContent = `v${EXTENSION_VERSION}`;
 
         const loading = document.getElementById('loading');
         const errorDiv = document.getElementById('error');

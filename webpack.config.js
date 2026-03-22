@@ -2,6 +2,7 @@ const path = require('path');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
 const webpack = require('webpack');
 const fs = require('fs');
+const vssExtension = JSON.parse(fs.readFileSync(path.join(__dirname, 'vss-extension.json'), 'utf-8'));
 
 module.exports = {
   entry: './src/extension.ts',
@@ -30,6 +31,7 @@ module.exports = {
       ],
     }),
     new webpack.DefinePlugin({
+      'EXTENSION_VERSION': JSON.stringify(vssExtension.version),
       'PDF_WORKER_SRC': JSON.stringify(
         fs.readFileSync(
           path.join(__dirname, 'node_modules/pdfjs-dist/legacy/build/pdf.worker.min.mjs'),
