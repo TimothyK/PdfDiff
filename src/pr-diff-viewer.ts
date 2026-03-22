@@ -11,6 +11,8 @@ export class PdfDiffViewer {
     private maxPages: number = 0;
     private baseLabel: string = 'Base';
     private headLabel: string = 'Head';
+    private baseExists: boolean = true;
+    private headExists: boolean = true;
 
     constructor() {
         this.baseRenderer = new PdfRenderer();
@@ -37,14 +39,17 @@ export class PdfDiffViewer {
         this.maxPages = Math.max(basePages, headPages);
     }
 
-    async loadPdfsFromData(baseData: Uint8Array, headData: Uint8Array): Promise<void> {
-        await Promise.all([
-            this.baseRenderer.loadPdfFromData(baseData),
-            this.headRenderer.loadPdfFromData(headData)
-        ]);
+    async loadPdfsFromData(baseData: Uint8Array | null, headData: Uint8Array | null): Promise<void> {
+        this.baseExists = baseData !== null;
+        this.headExists = headData !== null;
 
-        const basePages = this.baseRenderer.getPageCount();
-        const headPages = this.headRenderer.getPageCount();
+        const loads: Promise<void>[] = [];
+        if (baseData) loads.push(this.baseRenderer.loadPdfFromData(baseData));
+        if (headData) loads.push(this.headRenderer.loadPdfFromData(headData));
+        await Promise.all(loads);
+
+        const basePages = this.baseExists ? this.baseRenderer.getPageCount() : 0;
+        const headPages = this.headExists ? this.headRenderer.getPageCount() : 0;
         this.maxPages = Math.max(basePages, headPages);
     }
 
@@ -60,21 +65,25 @@ export class PdfDiffViewer {
         baseContainer.innerHTML = '';
         headContainer.innerHTML = '';
 
-        const basePages = this.baseRenderer.getPageCount();
-        const headPages = this.headRenderer.getPageCount();
+        const basePages = this.baseExists ? this.baseRenderer.getPageCount() : 0;
+        const headPages = this.headExists ? this.headRenderer.getPageCount() : 0;
 
-        if (this.currentPage <= basePages) {
+        if (!this.baseExists) {
+            baseContainer.innerHTML = `<p style="padding: 20px; color: #666; font-style: italic;">Not present in ${this.baseLabel}</p>`;
+        } else if (this.currentPage <= basePages) {
             const basePage = await this.baseRenderer.renderPage(this.currentPage);
             baseContainer.appendChild(basePage.canvas);
         } else {
-            baseContainer.innerHTML = '<p style="padding: 20px; color: #666;">Page not in original</p>';
+            baseContainer.innerHTML = `<p style="padding: 20px; color: #666;">Page not in ${this.baseLabel}</p>`;
         }
 
-        if (this.currentPage <= headPages) {
+        if (!this.headExists) {
+            headContainer.innerHTML = `<p style="padding: 20px; color: #666; font-style: italic;">Not present in ${this.headLabel}</p>`;
+        } else if (this.currentPage <= headPages) {
             const headPage = await this.headRenderer.renderPage(this.currentPage);
             headContainer.appendChild(headPage.canvas);
         } else {
-            headContainer.innerHTML = '<p style="padding: 20px; color: #666;">Page not in modified</p>';
+            headContainer.innerHTML = `<p style="padding: 20px; color: #666;">Page not in ${this.headLabel}</p>`;
         }
     }
 
@@ -116,16 +125,38 @@ export class PdfDiffViewer {
     async renderPixelDiff(container: HTMLElement): Promise<void> {
         container.innerHTML = '';
 
-        const basePages = this.baseRenderer.getPageCount();
-        const headPages = this.headRenderer.getPageCount();
+        // Get base and head canvases — use a blank white canvas for whichever side is missing
+        let baseCanvas: HTMLCanvasElement;
+        let headCanvas: HTMLCanvasElement;
+        let width: number;
+        let height: number;
 
-        if (this.currentPage > basePages || this.currentPage > headPages) {
-            container.innerHTML = '<p style="padding: 20px; color: #666;">Cannot compare - page missing in one version</p>';
-            return;
+        if (!this.headExists) {
+            const basePage = await this.baseRenderer.renderPage(this.currentPage);
+            width = basePage.width;
+            height = basePage.height;
+            baseCanvas = this.resizeCanvas(basePage.canvas, width, height);
+            headCanvas = this.makeBlankCanvas(width, height);
+        } else if (!this.baseExists) {
+            const headPage = await this.headRenderer.renderPage(this.currentPage);
+            width = headPage.width;
+            height = headPage.height;
+            baseCanvas = this.makeBlankCanvas(width, height);
+            headCanvas = this.resizeCanvas(headPage.canvas, width, height);
+        } else {
+            const basePages = this.baseRenderer.getPageCount();
+            const headPages = this.headRenderer.getPageCount();
+            if (this.currentPage > basePages || this.currentPage > headPages) {
+                container.innerHTML = '<p style="padding: 20px; color: #666;">Cannot compare - page missing in one version</p>';
+                return;
+            }
+            const basePage = await this.baseRenderer.renderPage(this.currentPage);
+            const headPage = await this.headRenderer.renderPage(this.currentPage);
+            width = Math.max(basePage.width, headPage.width);
+            height = Math.max(basePage.height, headPage.height);
+            baseCanvas = this.resizeCanvas(basePage.canvas, width, height);
+            headCanvas = this.resizeCanvas(headPage.canvas, width, height);
         }
-
-        const basePage = await this.baseRenderer.renderPage(this.currentPage);
-        const headPage = await this.headRenderer.renderPage(this.currentPage);
 
         // Create comparison container
         const comparisonDiv = document.createElement('div');
@@ -133,14 +164,6 @@ export class PdfDiffViewer {
 
         const diffContainer = document.createElement('div');
         diffContainer.className = 'diff-canvas-container';
-
-        // Ensure both canvases are the same size
-        const width = Math.max(basePage.width, headPage.width);
-        const height = Math.max(basePage.height, headPage.height);
-
-        // Resize canvases if needed
-        const baseCanvas = this.resizeCanvas(basePage.canvas, width, height);
-        const headCanvas = this.resizeCanvas(headPage.canvas, width, height);
 
         // Create diff canvas
         const diffCanvas = document.createElement('canvas');
@@ -202,6 +225,18 @@ export class PdfDiffViewer {
 
         comparisonDiv.appendChild(diffContainer);
         container.appendChild(comparisonDiv);
+    }
+
+    private makeBlankCanvas(width: number, height: number): HTMLCanvasElement {
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, width, height);
+        }
+        return canvas;
     }
 
     private resizeCanvas(sourceCanvas: HTMLCanvasElement, width: number, height: number): HTMLCanvasElement {
