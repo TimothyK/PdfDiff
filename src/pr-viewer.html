@@ -183,6 +183,58 @@
             font-size: 14px;
             color: #666;
         }
+
+        #path-display {
+            padding: 5px 12px;
+            background-color: #f9f9f9;
+            border-bottom: 1px solid #ddd;
+            font-size: 12px;
+            font-family: monospace;
+            color: #333;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .file-picker {
+            padding: 24px;
+        }
+
+        .file-picker-message {
+            margin: 0 0 16px 0;
+            color: #333;
+        }
+
+        .file-picker-empty {
+            color: #666;
+            font-style: italic;
+        }
+
+        .file-picker-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .file-picker-item {
+            display: block;
+            width: 100%;
+            text-align: left;
+            padding: 8px 12px;
+            margin-bottom: 6px;
+            font-family: monospace;
+            font-size: 13px;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            cursor: pointer;
+            color: #0078d4;
+        }
+
+        .file-picker-item:hover {
+            background-color: #f0f6ff;
+            border-color: #0078d4;
+        }
     </style>
 </head>
 <body>
@@ -198,6 +250,8 @@
         </div>
         <div style="margin-left:auto;font-size:12px;color:#333;font-weight:bold;align-self:center;padding:0 8px;border:1px solid #ccc;border-radius:3px;background:#fff" id="ext-version">v?</div>
     </div>
+
+    <div id="path-display"></div>
 
     <div id="viewer-container">
         <div id="loading">Loading PDF files...</div>

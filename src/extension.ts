@@ -11,6 +11,7 @@ const _EXT_VERSION: string = (typeof EXTENSION_VERSION !== 'undefined') ? EXTENS
 console.warn(`>>> PDF Diff Viewer version: ${_EXT_VERSION} <<<`);
 
 let diffViewer: PdfDiffViewer | null = null;
+let overridePath: string | null = null;
 
 function showDebug(lines: string[]): void {
     const debugDiv = document.getElementById('debug-info');
@@ -20,6 +21,8 @@ function showDebug(lines: string[]): void {
     }
     lines.forEach(l => console.log('[PDF-DIFF DEBUG]', l));
 }
+// Keep showDebug available for error diagnostics
+void showDebug;
 
 function trySetVersionDisplay(): void {
     const versionEl = document.getElementById('ext-version');
@@ -187,189 +190,211 @@ function setupEventListeners() {
 
 async function loadPdfsFromContext(): Promise<void> {
     try {
-        // Get configuration and project context from Azure DevOps
         const config = SDK.getConfiguration();
         const projectService = await SDK.getService<IProjectPageService>(CommonServiceIds.ProjectPageService);
         const project = await projectService.getProject();
 
-        if (!project) {
-            throw new Error('Could not get project context from SDK');
-        }
+        if (!project) throw new Error('Could not get project context from SDK');
 
-        // Get PR ID and repository ID from config
         const pullRequestId: number = (config as any).pullRequestId;
         const repositoryId: string = (config as any).repositoryId;
         const pullRequest = (config as any).pullRequest;
-        
-        console.log('Full pullRequest object:', JSON.stringify(pullRequest, null, 2));
-        
-        if (!pullRequestId) {
-            throw new Error('Pull Request ID not found. Please ensure this tab is opened in a Pull Request context.');
-        }
-        
-        if (!repositoryId) {
-            throw new Error(`Repository ID not found. PR ID: ${pullRequestId}`);
-        }
-        
-        if (!pullRequest) {
-            throw new Error(`Pull Request data not found in config. PR ID: ${pullRequestId}`);
-        }
-        
-        console.log(`Loading PDF diff for PR ${pullRequestId} in repository ${repositoryId}`);
-        console.log(`Project: ${project.name} (${project.id})`);
-        console.log('Pull request object:', JSON.stringify(pullRequest, null, 2));
 
-        // Get commit IDs - use sourceRefName tip (latest changes) vs targetRefName tip (merge destination)
-        // lastMergeSourceCommit is the source branch tip at last merge attempt
-        // lastMergeTargetCommit is the target branch tip at last merge attempt
+        if (!pullRequestId) throw new Error('Pull Request ID not found. Please ensure this tab is opened in a Pull Request context.');
+        if (!repositoryId) throw new Error(`Repository ID not found. PR ID: ${pullRequestId}`);
+        if (!pullRequest) throw new Error(`Pull Request data not found in config. PR ID: ${pullRequestId}`);
+
+        console.log(`Loading PDF diff for PR ${pullRequestId} in repository ${repositoryId}`);
+
         const sourceCommitId = pullRequest.lastMergeSourceCommit?.commitId;
         const targetCommitId = pullRequest.lastMergeTargetCommit?.commitId;
 
-        console.log(`Source commit (changes): ${sourceCommitId}`);
-        console.log(`Target commit (merge into): ${targetCommitId}`);
-        
+        console.log(`Source commit (head): ${sourceCommitId}`);
+        console.log(`Target commit (base): ${targetCommitId}`);
+
         if (!sourceCommitId || !targetCommitId) {
             throw new Error('Could not determine source and target commits for this Pull Request');
         }
 
-        // Extract the PDF path from the host page URL query parameters.
-        // Log synchronous info immediately so it always appears even if async calls hang.
-        const iframeParams = new URLSearchParams(window.location.search);
-        let referrerPath: string | null = null;
-        let referrerParseError = '';
-        try {
-            if (document.referrer) {
-                const referrerParams = new URLSearchParams(new URL(document.referrer).search);
-                referrerPath = referrerParams.get('path');
-            }
-        } catch (e) {
-            referrerParseError = String(e);
-        }
-
-        const syncDebug = [
-            '=== URL Diagnostics (sync) ===',
-            `window.location.href: ${window.location.href}`,
-            `window.location.search: ${window.location.search}`,
-            `document.referrer: ${document.referrer}`,
-            `iframe path param: ${iframeParams.get('path') ?? '(not found)'}`,
-            `referrer path param: ${referrerPath ?? '(not found)'}`,
-            referrerParseError ? `referrer parse error: ${referrerParseError}` : '',
-            'Calling getQueryParams()...',
-        ].filter(Boolean);
-        showDebug(syncDebug);
-
-        // Try IHostNavigationService.getQueryParams() with a 5-second timeout
-        let navPath: string | null = null;
-        let queryParams: { [key: string]: string } = {};
-        try {
-            type NavResult = { ok: true; params: { [key: string]: string } } | { ok: false; error: string };
-            const navResult = await Promise.race<NavResult>([
-                (async (): Promise<NavResult> => {
-                    const navigationService = await SDK.getService<IHostNavigationService>(CommonServiceIds.HostNavigationService);
-                    const params = await navigationService.getQueryParams();
-                    return { ok: true, params };
-                })(),
-                new Promise<NavResult>(resolve =>
-                    setTimeout(() => resolve({ ok: false, error: 'timed out after 5s' }), 5000)
-                ),
-            ]);
-            if (navResult.ok) {
-                queryParams = navResult.params;
-                navPath = queryParams['path'] || null;
-            }
-            showDebug([
-                ...syncDebug,
-                navResult.ok
-                    ? `getQueryParams() result: ${JSON.stringify(queryParams)}`
-                    : `getQueryParams() ${navResult.error}`,
-                `getQueryParams() path: ${navPath ?? '(not found)'}`,
-            ]);
-        } catch (navError) {
-            showDebug([...syncDebug, `getQueryParams() error: ${navError}`]);
-        }
-
-        // Pick best available path value
-        const pdfPath = navPath || referrerPath || iframeParams.get('path');
-
-        if (!pdfPath) {
-            throw new Error('No PDF file selected. Please select a PDF file from the Files tab. (See debug panel)');
-        }
-
-        console.log(`PDF path from URL: ${pdfPath}`);
-
-        // Get base URI for API calls
-        // Try to extract from pullRequest object which might have repository URL
+        // Compute base URI early — needed for both the file picker and PDF loading
         const repoUrl = pullRequest?.repository?.url || pullRequest?.repository?.remoteUrl || '';
-        console.log('Repository URL from pullRequest:', repoUrl);
-        
-        // Extract base URL from repository URL if available
-        // Format: https://dev.azure.com/{org}/_apis/git/repositories/{id}
         let baseUri = 'https://dev.azure.com';
         if (repoUrl) {
-            const repoUrlMatch = repoUrl.match(/(https?:\/\/[^\/]+\/[^\/]+)/);
-            if (repoUrlMatch) {
-                baseUri = repoUrlMatch[1];
-            }
+            const m = repoUrl.match(/(https?:\/\/[^\/]+\/[^\/]+)/);
+            if (m) baseUri = m[1];
         }
-        
-        // Fallback: try document.referrer
         if (baseUri === 'https://dev.azure.com') {
             const parentUrl = document.referrer || window.location.href;
-            console.log('Parent URL:', parentUrl);
-            const urlMatch = parentUrl.match(/https?:\/\/[^\/]+\/([^\/]+)\//);
-            const organization = urlMatch ? urlMatch[1] : '';
-            if (organization) {
-                baseUri = `https://dev.azure.com/${organization}`;
-            }
+            const m = parentUrl.match(/https?:\/\/[^\/]+\/([^\/]+)\//);
+            if (m) baseUri = `https://dev.azure.com/${m[1]}`;
         }
-        
         console.log(`Base URI: ${baseUri}`);
-        
-        console.log('Fetching PDF files from commits...');
+
+        // Resolve the selected path: overridePath (file picker click) > nav service > referrer > iframe params
+        let selectedPath: string | null = overridePath;
+        if (!selectedPath) {
+            const iframeParams = new URLSearchParams(window.location.search);
+            let referrerPath: string | null = null;
+            try {
+                if (document.referrer) {
+                    referrerPath = new URLSearchParams(new URL(document.referrer).search).get('path');
+                }
+            } catch (_) { /* ignore */ }
+
+            let navPath: string | null = null;
+            try {
+                type NavResult = { ok: true; params: { [key: string]: string } } | { ok: false; error: string };
+                const navResult = await Promise.race<NavResult>([
+                    (async (): Promise<NavResult> => {
+                        const nav = await SDK.getService<IHostNavigationService>(CommonServiceIds.HostNavigationService);
+                        const p = await nav.getQueryParams();
+                        return { ok: true, params: p };
+                    })(),
+                    new Promise<NavResult>(resolve => setTimeout(() => resolve({ ok: false, error: 'timed out' }), 5000)),
+                ]);
+                if (navResult.ok) navPath = navResult.params['path'] || null;
+            } catch (_) { /* ignore */ }
+
+            selectedPath = navPath || referrerPath || iframeParams.get('path');
+        }
+
+        console.log(`Selected path: ${selectedPath}`);
+        updatePathDisplay(selectedPath);
+
+        // If no path or the path is not a PDF, show the file picker
+        if (!selectedPath || !selectedPath.toLowerCase().endsWith('.pdf')) {
+            const loading = document.getElementById('loading');
+            if (loading) loading.style.display = 'none';
+
+            let changedPdfs: string[] = [];
+            try {
+                changedPdfs = await fetchChangedPdfFiles(baseUri, project.name, repositoryId, sourceCommitId, targetCommitId);
+            } catch (err) {
+                console.error('Failed to fetch changed PDF files:', err);
+            }
+            showFilePicker(changedPdfs, selectedPath);
+            SDK.notifyLoadSucceeded();
+            return;
+        }
+
+        // Load and render the diff for the selected PDF
+        console.log(`Loading PDF diff for: ${selectedPath}`);
+        let targetData: Uint8Array | null = null;
         try {
-            // Fetch the PDF files using fetch directly
-            // Try both commits - if one fails, the file might not exist in that commit
-            console.log('About to fetch target PDF (before changes)...');
-            let targetData: Uint8Array | null = null;
-            try {
-                targetData = await fetchPdfFile(baseUri, project.name, repositoryId, pdfPath, targetCommitId);
-                console.log('Target PDF fetched successfully');
-            } catch (err) {
-                console.log('Target PDF not found (file might be new in this PR):', err);
-            }
-            
-            console.log('About to fetch source PDF (with changes)...');
-            let sourceData: Uint8Array | null = null;
-            try {
-                sourceData = await fetchPdfFile(baseUri, project.name, repositoryId, pdfPath, sourceCommitId);
-                console.log('Source PDF fetched successfully');
-            } catch (err) {
-                console.log('Source PDF not found (file might be deleted in this PR):', err);
-            }
+            targetData = await fetchPdfFile(baseUri, project.name, repositoryId, selectedPath, targetCommitId);
+            console.log('Base PDF fetched successfully');
+        } catch (err) {
+            console.log('Base PDF not found (file might be new in this PR):', err);
+        }
 
-            if (!targetData && !sourceData) {
-                throw new Error('PDF file not found in either commit');
-            }
+        let sourceData: Uint8Array | null = null;
+        try {
+            sourceData = await fetchPdfFile(baseUri, project.name, repositoryId, selectedPath, sourceCommitId);
+            console.log('Head PDF fetched successfully');
+        } catch (err) {
+            console.log('Head PDF not found (file might be deleted in this PR):', err);
+        }
 
-            console.log('PDF files fetched, rendering diff...');
-            if (diffViewer) {
-                // If only one file exists, show it (new file or deleted file case)
-                const baseData = targetData || sourceData!;
-                const headData = sourceData || targetData!;
-                await diffViewer.loadPdfsFromData(baseData, headData);
-                console.log('PDFs loaded, now rendering side-by-side view...');
-                await diffViewer.render('side-by-side');
-                console.log('PDF diff rendered successfully');
-            }
-        } catch (apiError) {
-            console.error('API Error details:', apiError);
-            throw apiError;
+        if (!targetData && !sourceData) {
+            throw new Error(`PDF file not found in either commit: ${selectedPath}`);
+        }
+
+        if (diffViewer) {
+            const baseData = targetData || sourceData!;
+            const headData = sourceData || targetData!;
+            await diffViewer.loadPdfsFromData(baseData, headData);
+            await diffViewer.render('side-by-side');
+            console.log('PDF diff rendered successfully');
         }
 
     } catch (error) {
         console.error('Error loading PDFs from context:', error);
         throw error;
     }
+}
+
+function updatePathDisplay(path: string | null): void {
+    const el = document.getElementById('path-display');
+    if (el) el.textContent = path ? `File: ${path}` : 'No file selected';
+}
+
+async function fetchChangedPdfFiles(
+    baseUri: string, projectName: string, repositoryId: string,
+    sourceCommitId: string, targetCommitId: string
+): Promise<string[]> {
+    const apiUrl = `${baseUri}/${projectName}/_apis/git/repositories/${repositoryId}/diffs/commits` +
+        `?baseVersion=${targetCommitId}&baseVersionType=commit` +
+        `&targetVersion=${sourceCommitId}&targetVersionType=commit` +
+        `&$top=1000&api-version=7.0`;
+    console.log(`Fetching changed files: ${apiUrl}`);
+
+    const accessToken = await SDK.getAccessToken();
+    const response = await fetch(apiUrl, {
+        headers: { 'Authorization': `Bearer ${accessToken}` }
+    });
+
+    if (!response.ok) {
+        throw new Error(`Failed to fetch changed files: HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+    const changes: any[] = data.changes || [];
+    return changes
+        .filter(c => !c.item?.isFolder && c.item?.path?.toLowerCase().endsWith('.pdf'))
+        .map(c => c.item.path as string)
+        .sort();
+}
+
+function showFilePicker(pdfs: string[], currentPath: string | null): void {
+    // Remove any existing picker
+    document.getElementById('file-picker')?.remove();
+
+    const container = document.getElementById('viewer-container');
+    if (!container) return;
+
+    const picker = document.createElement('div');
+    picker.id = 'file-picker';
+    picker.className = 'file-picker';
+
+    const msg = document.createElement('p');
+    msg.className = 'file-picker-message';
+    if (currentPath && !currentPath.toLowerCase().endsWith('.pdf')) {
+        msg.textContent = `"${currentPath}" is not a PDF file. Select a PDF changed in this pull request:`;
+    } else {
+        msg.textContent = 'Select a PDF file changed in this pull request:';
+    }
+    picker.appendChild(msg);
+
+    if (pdfs.length === 0) {
+        const empty = document.createElement('p');
+        empty.className = 'file-picker-empty';
+        empty.textContent = 'No PDF files were changed in this pull request.';
+        picker.appendChild(empty);
+    } else {
+        const list = document.createElement('ul');
+        list.className = 'file-picker-list';
+        pdfs.forEach(path => {
+            const li = document.createElement('li');
+            const btn = document.createElement('button');
+            btn.className = 'file-picker-item';
+            btn.textContent = path;
+            btn.addEventListener('click', () => {
+                overridePath = path;
+                picker.remove();
+                const loading = document.getElementById('loading');
+                if (loading) {
+                    loading.textContent = `Loading ${path}...`;
+                    loading.style.display = 'block';
+                }
+                loadPdfsFromContext();
+            });
+            li.appendChild(btn);
+            list.appendChild(li);
+        });
+        picker.appendChild(list);
+    }
+
+    container.insertBefore(picker, container.firstChild);
 }
 
 async function fetchPdfFile(baseUri: string, projectName: string, repositoryId: string, path: string, commitId: string): Promise<Uint8Array> {
