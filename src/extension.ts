@@ -378,7 +378,14 @@ function showFilePicker(pdfs: string[], currentPath: string | null): void {
             const btn = document.createElement('button');
             btn.className = 'file-picker-item';
             btn.textContent = path;
-            btn.addEventListener('click', () => {
+            btn.addEventListener('click', async () => {
+                // Update the host page URL so the path is reflected in the address bar
+                try {
+                    const nav = await SDK.getService<IHostNavigationService>(CommonServiceIds.HostNavigationService);
+                    nav.setQueryParams({ path });
+                } catch (e) {
+                    console.warn('Could not update URL query params:', e);
+                }
                 overridePath = path;
                 picker.remove();
                 const loading = document.getElementById('loading');
