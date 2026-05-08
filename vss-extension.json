@@ -2,8 +2,9 @@
   "manifestVersion": 1,
   "id": "pdf-diff-viewer",
   "name": "PDF Diff Viewer",
-  "version": "0.3.6",
+  "version": "0.3.7",
   "publisher": "CodeMonkeyProjectiles",
+  "public": true,
   "description": "View PDF file diffs in pull requests with side-by-side, inline, and pixel diff views",
   "categories": [
     "Azure Repos"
